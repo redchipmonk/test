@@ -1,0 +1,336 @@
+# =========================================================================
+# VR Capstone Course Template - Combined .gitattributes
+# Unity 6.3 LTS + OpenXR (Meta Quest 3) AND Xcode + visionOS (Apple Vision Pro)
+# =========================================================================
+
+# =========================================================================
+# MACROS (only work in top-level gitattributes files)
+# =========================================================================
+[attr]lfs               filter=lfs diff=lfs merge=lfs -text
+[attr]unity-json        eol=lf linguist-language=json
+[attr]unity-yaml        merge=unityyamlmerge eol=lf linguist-language=yaml
+
+# Optionally collapse Unity-generated files on GitHub diffs
+# [attr]unity-yaml        merge=unityyamlmerge text linguist-language=yaml linguist-generated
+
+# =========================================================================
+# SECTION 1: UNITY SOURCE FILES
+# =========================================================================
+
+# C# scripts
+*.cs                    text diff=csharp
+
+# Shader files
+*.cginc                 text
+*.compute               text linguist-language=hlsl
+*.hlsl                  text linguist-language=hlsl
+*.raytrace              text linguist-language=hlsl
+*.shader                text
+
+# Unity JSON files
+*.asmdef                unity-json
+*.asmref                unity-json
+*.index                 unity-json
+*.inputactions          unity-json
+*.shadergraph           unity-json
+*.shadersubgraph        unity-json
+
+# Unity UI Toolkit files
+# Note: *.tss is Unity's UI Toolkit stylesheet, NOT Tabs Studio files
+*.tss                   text diff=css linguist-language=css
+*.uss                   text diff=css linguist-language=css
+*.uxml                  text linguist-language=xml linguist-detectable
+
+# Unity YAML files
+*.anim                  unity-yaml
+*.asset                 unity-yaml
+*.brush                 unity-yaml
+*.controller            unity-yaml
+*.flare                 unity-yaml
+*.fontsettings          unity-yaml
+*.giparams              unity-yaml
+*.guiskin               unity-yaml
+*.lighting              unity-yaml
+*.mask                  unity-yaml
+*.mat                   unity-yaml
+*.meta                  unity-yaml
+*.mixer                 unity-yaml
+*.overrideController    unity-yaml
+*.playable              unity-yaml
+*.prefab                unity-yaml
+*.preset                unity-yaml
+*.renderTexture         unity-yaml
+*.scenetemplate         unity-yaml
+*.shadervariants        unity-yaml
+*.signal                unity-yaml
+*.spriteatlas           unity-yaml
+*.spriteatlasv2         unity-yaml
+*.terrainlayer          unity-yaml
+*.unity                 unity-yaml
+
+# Physics materials ("physic" for 3D, "physics" for 2D)
+*.physicMaterial        unity-yaml
+*.physicsMaterial2D     unity-yaml
+
+# Exclude third-party plugins from GitHub language stats
+Assets/Plugins/**       linguist-vendored
+
+# =========================================================================
+# SECTION 2: SWIFT / visionOS SOURCE FILES
+# =========================================================================
+
+# Swift source files
+*.swift                 text diff=swift linguist-language=swift
+
+# SwiftUI previews (text files)
+*.swift.preview         text
+
+# Xcode project files (text-based)
+# Note: pbxproj files are text but can be hard to diff meaningfully.
+# Remove -diff if your team wants to review project file changes in PRs.
+*.pbxproj               text -diff
+*.xcscheme              text linguist-language=xml
+*.xcworkspacedata       text linguist-language=xml
+*.xcsettings            text linguist-language=xml
+*.entitlements          text linguist-language=xml
+
+# Swift Package Manager
+Package.swift           text linguist-language=swift
+Package.resolved        text linguist-language=json
+
+# Storyboards and XIBs
+*.storyboard            text linguist-language=xml
+*.xib                   text linguist-language=xml
+
+# Property lists
+*.plist                 text linguist-language=xml
+
+# Metal shaders
+*.metal                 text linguist-language=metal
+
+# =========================================================================
+# SECTION 3: REALITYKIT / visionOS 3D ASSETS
+# =========================================================================
+
+# USD files (Universal Scene Description) - can be text or binary
+# .usda is ASCII (text), .usdc is binary, .usdz is compressed archive
+*.usda                  text
+*.usdc                  lfs
+*.usdz                  lfs
+
+# Reality Composer Pro files
+*.reality               lfs
+
+# Reality Composer Pro projects (.rcproject is a directory/package)
+# Git handles directories automatically - internal binary files (USD, images)
+# are covered by LFS rules below. No special handling needed for the package itself.
+
+Package.realitycomposerpro text linguist-language=json
+
+# Reality Composer Pro asset packages (.rkassets is a directory/package)
+# The package contains USD files and other assets that benefit from LFS
+# Note: Git handles this as a directory, so we track contents individually
+# Large binary contents inside will be handled by the LFS rules below
+
+# =========================================================================
+# SECTION 4: GIT LFS - 3D MODELS
+# =========================================================================
+
+*.3dm                   lfs
+*.3ds                   lfs
+*.blend                 lfs
+*.c4d                   lfs
+*.collada               lfs
+*.dae                   lfs
+*.dxf                   lfs
+*.FBX                   lfs
+*.fbx                   lfs
+*.jas                   lfs
+*.lws                   lfs
+*.lxo                   lfs
+*.ma                    lfs
+*.max                   lfs
+*.mb                    lfs
+*.obj                   lfs
+*.ply                   lfs
+*.skp                   lfs
+*.stl                   lfs
+*.ztl                   lfs
+
+# Spine animation files (Unity)
+*.skel.bytes            lfs
+
+# =========================================================================
+# SECTION 5: GIT LFS - AUDIO
+# =========================================================================
+
+*.aif                   lfs
+*.aiff                  lfs
+*.it                    lfs
+*.mod                   lfs
+*.mp3                   lfs
+*.ogg                   lfs
+*.s3m                   lfs
+*.wav                   lfs
+*.xm                    lfs
+*.m4a                   lfs
+*.flac                  lfs
+
+# =========================================================================
+# SECTION 6: GIT LFS - VIDEO
+# =========================================================================
+
+*.asf                   lfs
+*.avi                   lfs
+*.flv                   lfs
+*.mov                   lfs
+*.mp4                   lfs
+*.mpeg                  lfs
+*.mpg                   lfs
+*.ogv                   lfs
+*.wmv                   lfs
+*.webm                  lfs
+*.m4v                   lfs
+
+# =========================================================================
+# SECTION 7: GIT LFS - IMAGES
+# =========================================================================
+
+*.bmp                   lfs
+*.exr                   lfs
+*.gif                   lfs
+*.hdr                   lfs
+*.iff                   lfs
+*.jpeg                  lfs
+*.jpg                   lfs
+*.pict                  lfs
+*.png                   lfs
+*.psd                   lfs
+*.tga                   lfs
+*.tif                   lfs
+*.tiff                  lfs
+*.webp                  lfs
+*.svg                   text linguist-language=svg
+*.heic                  lfs
+*.heif                  lfs
+
+# Unity LFS
+*.cubemap               lfs
+*.unitypackage          lfs
+
+# =========================================================================
+# SECTION 8: GIT LFS - ARCHIVES
+# =========================================================================
+
+*.7z                    lfs
+*.bz2                   lfs
+*.gz                    lfs
+*.rar                   lfs
+*.tar                   lfs
+*.zip                   lfs
+*.xz                    lfs
+
+# =========================================================================
+# SECTION 9: GIT LFS - LIBRARIES AND EXECUTABLES
+# =========================================================================
+
+# Compiled libraries
+*.dll                   lfs
+*.pdb                   lfs
+*.so                    lfs
+*.dylib                 lfs
+*.a                     lfs
+*.lib                   lfs
+
+# Note: *.framework is a directory bundle on macOS, not a single file.
+# Binary contents inside (.dylib, executables) are handled by patterns above.
+# If you need to track vendored frameworks, handle their internal binaries.
+
+# Executables and build outputs
+*.apk                   lfs
+*.exe                   lfs
+
+# iOS/visionOS specific
+*.car                   lfs
+
+# =========================================================================
+# SECTION 9a: XCODE ASSET CATALOGS (.xcassets)
+# =========================================================================
+# NOTE: .xcassets is a directory (package), not a single file.
+# We handle the contents individually for proper tracking.
+
+# Asset catalog JSON metadata (text, should be diffable)
+# This pattern matches all Contents.json files including those in xcassets
+**/Contents.json                    text linguist-language=json
+
+# Asset catalog binary contents use LFS via the image rules above
+# (*.png, *.jpg, *.pdf, etc. are already configured for LFS)
+
+# =========================================================================
+# SECTION 10: GIT LFS - FONTS
+# =========================================================================
+
+*.otf                   lfs
+*.ttf                   lfs
+*.woff                  lfs
+*.woff2                 lfs
+
+# =========================================================================
+# SECTION 11: GIT LFS - DOCUMENTS
+# =========================================================================
+
+*.pdf                   lfs
+*.docx                  lfs
+*.xlsx                  lfs
+*.pptx                  lfs
+
+# =========================================================================
+# SECTION 12: GIT LFS - OTHER
+# =========================================================================
+
+*.reason                lfs
+*.rns                   lfs
+
+# Machine learning models
+*.mlmodel               lfs
+*.mlmodelc              lfs
+*.onnx                  lfs
+
+# =========================================================================
+# SECTION 13: TEXT FILE NORMALIZATION
+# =========================================================================
+
+# Markdown files
+*.md                    text diff=markdown
+
+# JSON files
+*.json                  text linguist-language=json
+
+# YAML files  
+*.yml                   text linguist-language=yaml
+*.yaml                  text linguist-language=yaml
+
+# XML files
+*.xml                   text linguist-language=xml
+
+# Shell scripts
+*.sh                    text eol=lf
+*.bash                  text eol=lf
+*.zsh                   text eol=lf
+
+# Windows batch files
+*.bat                   text eol=crlf
+*.cmd                   text eol=crlf
+
+# Gradle files (Android/Quest builds)
+*.gradle                text linguist-language=groovy
+*.gradle.kts            text linguist-language=kotlin
+gradlew                 text eol=lf
+gradlew.bat             text eol=crlf
+
+# Android specific
+*.pro                   text
+
+# =========================================================================
+# END OF FILE
+# =========================================================================
