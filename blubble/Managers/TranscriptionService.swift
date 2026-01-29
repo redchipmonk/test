@@ -8,43 +8,57 @@
 import Foundation
 import Speech
 import AVFoundation
-import SwiftUI
 import Combine
 
-class TranscriptionService: ObservableObject {
+
+@MainActor
+final class TranscriptionService: ObservableObject {
+
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    
+
     @Published var transcript: String = ""
     @Published var isFinal: Bool = false
 
-    func startTranscribing(buffer: AVAudioPCMBuffer) {
-        if recognitionRequest == nil {
-            prepareRecognition()
-        }
-        recognitionRequest?.append(buffer)
-    }
+    func start() {
+        reset()
 
-    private func prepareRecognition() {
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else { return }
-        recognitionRequest.shouldReportPartialResults = true // Critical for <500ms latency
+        guard let recognitionRequest else { return }
 
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { result, error in
-            if let result = result {
-                DispatchQueue.main.async {
-                    self.transcript = result.bestTranscription.formattedString
-                    self.isFinal = result.isFinal
-                }
+        recognitionRequest.shouldReportPartialResults = true
+
+        recognitionTask = speechRecognizer?.recognitionTask(
+            with: recognitionRequest
+        ) { [weak self] result, error in
+            guard let self else { return }
+
+            if let result {
+                self.transcript = result.bestTranscription.formattedString
+                self.isFinal = result.isFinal
+            }
+
+            if error != nil {
+                print("Speech recognition error:", error!)
             }
         }
     }
-    
-    func reset() {
+
+    func appendAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+        recognitionRequest?.append(buffer)
+    }
+
+    func stop() {
+        recognitionRequest?.endAudio()
         recognitionTask?.finish()
         recognitionTask = nil
         recognitionRequest = nil
+    }
+
+    func reset() {
+        stop()
         transcript = ""
+        isFinal = false
     }
 }
