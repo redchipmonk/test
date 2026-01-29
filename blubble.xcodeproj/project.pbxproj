@@ -16,7 +16,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E113C2742F2AF7AF007D3DF3 /* Exceptions for "blubble" folder in "blubble" target */ = {
+		E113C2A82F2AFFF7007D3DF3 /* Exceptions for "blubble" folder in "blubble" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -29,7 +29,7 @@
 		E113C2662F2AF7AD007D3DF3 /* blubble */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				E113C2742F2AF7AF007D3DF3 /* Exceptions for "blubble" folder in "blubble" target */,
+				E113C2A82F2AFFF7007D3DF3 /* Exceptions for "blubble" folder in "blubble" target */,
 			);
 			path = blubble;
 			sourceTree = "<group>";
