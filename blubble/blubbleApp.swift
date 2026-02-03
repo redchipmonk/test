@@ -11,23 +11,23 @@ import SwiftUI
 struct blubbleApp: App {
 
     @State private var appModel = AppModel()
+    @State private var voiceSpatialManager = VoiceSpatialManager()
+    @State private var conversationStore = ConversationStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(appModel)
+                .environment(voiceSpatialManager)
+                .environment(conversationStore)
         }
-
-        ImmersiveSpace(id: appModel.immersiveSpaceID) {
-            ImmersiveView()
-                .environment(appModel)
-                .onAppear {
-                    appModel.immersiveSpaceState = .open
-                }
-                .onDisappear {
-                    appModel.immersiveSpaceState = .closed
-                }
+        .windowStyle(.plain)
+        .defaultSize(width: 500, height: 600)
+        
+        ImmersiveSpace(id: "PartnerTracking") {
+            PartnerTrackingView()
+                .environment(voiceSpatialManager)
         }
-        .immersionStyle(selection: .constant(.full), in: .full)
+        .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }
