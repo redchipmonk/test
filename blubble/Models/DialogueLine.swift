@@ -6,12 +6,14 @@
 //
 
 import Foundation
+import simd
 
 struct DialogueLine: Identifiable {
     let id = UUID()
     let text: String
     let speaker: SpeakerType
     let timestamp: Date = Date()
+    var worldPosition: SIMD3<Float>? // For partner's spatial position
 }
 
 enum SpeakerType {

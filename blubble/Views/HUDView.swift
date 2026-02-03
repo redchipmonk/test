@@ -35,7 +35,7 @@ struct HUDView: View {
                 .onChange(of: speechService.transcript) { oldTranscript, newTranscript in
                     if speechService.isFinal {
                         // [cite: 15, 27] Logic to separate user/partner based on audio heuristics
-                        let newSpeaker: SpeakerType = audioManager.currentRMS > 0.05 ? .user : .partner
+                        let newSpeaker: SpeakerType = audioManager.currentRMS > 0.1 ? .user : .partner
                         let newLine = DialogueLine(text: newTranscript, speaker: newSpeaker)
                         conversation.append(newLine)
                         
