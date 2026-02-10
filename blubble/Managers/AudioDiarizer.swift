@@ -8,9 +8,10 @@
 import Foundation
 import FluidAudio
 import AVFoundation
+import CoreML
 
 actor AudioDiarizer {
-    private var diarizer: DiarizerManager?
+    private var diarizer: SortformerDiarizer?
     private var isModelLoaded: Bool = false
     
     enum DiarizerError: Error {
@@ -24,23 +25,39 @@ actor AudioDiarizer {
         guard !isModelLoaded else { return }
         
         do {
-            print("⏳ AudioDiarizer: Downloading models...")
-            let models = try await DiarizerModels.downloadIfNeeded()
+            print("⏳ AudioDiarizer: Initializing Sortformer config...")
+            // Create default config
+            let config = SortformerConfig.default
             
-            print("⏳ AudioDiarizer: Initializing manager...")
-            let newDiarizer = DiarizerManager()
+            print("⏳ AudioDiarizer: Creating diarizer instance...")
+            // Create diarizer with config first (matches documentation pattern)
+            let newDiarizer = SortformerDiarizer(config: config)
+            
+            print("⏳ AudioDiarizer: Downloading/Loading Sortformer models...")
+            // Load models from HuggingFace (or cache)
+            // Use CPU-only on Simulator to avoid Metal/MPSGraph errors
+            #if targetEnvironment(simulator)
+            let computeUnits: MLComputeUnits = .cpuOnly
+            #else
+            let computeUnits: MLComputeUnits = .all
+            #endif
+            
+            let models = try await SortformerModels.loadFromHuggingFace(config: config, computeUnits: computeUnits)
+            
+            print("⏳ AudioDiarizer: Initializing pipeline...")
             newDiarizer.initialize(models: models)
             
             self.diarizer = newDiarizer
             self.isModelLoaded = true
-            print("✅ AudioDiarizer: Ready")
+            print("✅ AudioDiarizer: Ready (Sortformer)")
         } catch {
             print("❌ AudioDiarizer: Failed to load models - \(error)")
             throw DiarizerError.modelLoadingFailed
         }
     }
     
-    func process(buffer: AVAudioPCMBuffer) async throws -> DiarizationResult {
+    /// Process a checking of audio and return the result for that chunk (if available)
+    func process(buffer: AVAudioPCMBuffer) async throws -> SortformerChunkResult? {
         guard let diarizer = diarizer, isModelLoaded else {
             throw DiarizerError.modelNotLoaded
         }
@@ -53,68 +70,49 @@ actor AudioDiarizer {
         let frameCount = Int(buffer.frameLength)
         let samples = Array(UnsafeBufferPointer(start: channelData, count: frameCount))
         
-        // Process samples
-        // Note: We use performCompleteDiarization for chunks. 
-        // For strict streaming we might want a different approach, but performCompleteDiarization with small chunks (3-5s) 
-        // is recommended in the docs for real-time capture.
-        return try diarizer.performCompleteDiarization(samples)
+        // Process samples using Sortformer's streaming API
+        let result = try diarizer.processSamples(samples)
+        
+        // Debug logging for Sortformer output
+        if let result = result {
+            print("🔍 [Sortformer] Chunk Result:")
+            print("   Frame Count: \(result.frameCount)")
+            print("   Speaker Predictions Count: \(result.speakerPredictions.count)")
+            
+            // Show first few predictions as a sample
+            let sampleSize = min(8, result.speakerPredictions.count)
+            if sampleSize > 0 {
+                let sample = result.speakerPredictions.prefix(sampleSize)
+                print("   First \(sampleSize) predictions: \(sample.map { String(format: "%.3f", $0) })")
+            }
+            
+            // Show predictions for the last frame (most recent)
+            let numSpeakers = 4
+            if result.frameCount > 0 {
+                let lastFrameIndex = result.frameCount - 1
+                let startIdx = lastFrameIndex * numSpeakers
+                let endIdx = startIdx + numSpeakers
+                
+                if endIdx <= result.speakerPredictions.count {
+                    let lastFrameProbs = result.speakerPredictions[startIdx..<endIdx]
+                    print("   Latest frame [Sp1, Sp2, Sp3, Sp4]: [\(lastFrameProbs.map { String(format: "%.3f", $0) }.joined(separator: ", "))]")
+                    
+                    // Identify active speakers (prob > 0.5)
+                    let activeSpeakers = lastFrameProbs.enumerated().filter { $0.element > 0.5 }.map { "Speaker \($0.offset + 1) (\(String(format: "%.3f", $0.element)))" }
+                    if !activeSpeakers.isEmpty {
+                        print("   Active speakers: \(activeSpeakers.joined(separator: ", "))")
+                    } else {
+                        print("   Active speakers: None (all below 0.5ß threshold)")
+                    }
+                }
+            }
+        } else {
+            print("🔍 [Sortformer] No result returned for this chunk")
+        }
+        
+        return result
     }
     
-    func getSpeakerManager() -> SpeakerManager? {
-        return diarizer?.speakerManager
-    }
-    
-    /// Extract embedding from raw samples [Float]
-    func extractEmbedding(from samples: [Float]) async throws -> [Float] {
-        guard let diarizer = diarizer, let extractor = diarizer.embeddingExtractor else {
-            throw DiarizerError.modelNotLoaded
-        }
-        
-        // Create a mask of 1.0s for the entire duration (assuming proper enrollment clip)
-        // The extractor expects [[Float]] where outer is speakers, inner is frames.
-        // We simulate 1 speaker active for the whole clip.
-        
-        // Note: We need to know the frame count expected by the extractor or just pass a mask matching the audio length?
-        // Looking at EmbeddingExtractor code provided by user/docs:
-        // "numMasksInChunk = (firstMask.count * audio.count + 80_000) / 160_000" implies some ratio?
-        // Actually the user snippet shows:
-        // "let numFrames = slidingFeature.data[0].count" in DiarizerManager.
-        // And "masks.append(speakerMask)" where speakerMask has length numFrames.
-        
-        // Wait, the EmbeddingExtractor.getEmbeddings takes `audio` and `masks`.
-        // The mask length seems to be related to model output frames.
-        // Pyannote segmentation usually outputs frames every ~16ms.
-        // If we don't know the exact frame count, we might fail.
-        
-        // ALTERNATIVE:
-        // Run `performCompleteDiarization` on the enrollment clip.
-        // Find the speaker segment with the longest duration (should be our user).
-        // Return that embedding.
-        // This is robust because it uses the real segmentation model to find the speech.
-        
-        let result = try diarizer.performCompleteDiarization(samples)
-        
-        // Find the most prominent speaker
-        let speakerDurations = result.segments.reduce(into: [String: Float]()) { dict, segment in
-            dict[segment.speakerId, default: 0] += (segment.endTimeSeconds - segment.startTimeSeconds)
-        }
-        
-        guard let bestSpeakerId = speakerDurations.max(by: { $0.value < $1.value })?.key,
-              let bestSegment = result.segments.first(where: { $0.speakerId == bestSpeakerId }) else {
-            throw DiarizerError.processingFailed
-        }
-        
-        return bestSegment.embedding
-    }
-    
-    /// Extract embedding from a buffer for calibration
-    func extractEmbedding(from buffer: AVAudioPCMBuffer) async throws -> [Float] {
-        guard let channelData = buffer.floatChannelData?[0] else {
-            throw DiarizerError.processingFailed
-        }
-        
-        let frameCount = Int(buffer.frameLength)
-        let samples = Array(UnsafeBufferPointer(start: channelData, count: frameCount))
-        return try await extractEmbedding(from: samples)
-    }
+    // Note: Sortformer does NOT support SpeakerManager or Embedding Extraction compatible with the previous flow.
+    // We remove getSpeakerManager() and extractEmbedding().
 }

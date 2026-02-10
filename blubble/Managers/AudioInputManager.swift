@@ -12,7 +12,7 @@ import Speech
 import Combine
 
 @MainActor
-final class AudioInputManager: ObservableObject {
+final class AudioInputManager: NSObject, ObservableObject {
     @Published var currentRMS: Float = 0.0
     @Published var currentZCR: Float = 0.0
     @Published var isRunning: Bool = false
@@ -20,8 +20,13 @@ final class AudioInputManager: ObservableObject {
     @Published var transcript: String = ""
     // currentSpeaker is now derived from VoiceIdentityManager
     var currentSpeaker: Int? {
-        if identityManager.isUserSpeaking { return 0 }
-        if identityManager.isPartnerSpeaking { return 1 }
+        // Map "Speaker N" string to Int
+        if let speakerString = identityManager.currentSpeaker {
+            // "Speaker 1" -> 0, "Speaker 2" -> 1
+            if let id = Int(speakerString.components(separatedBy: " ").last ?? "") {
+                return id - 1
+            }
+        }
         return nil
     }
     
@@ -32,19 +37,6 @@ final class AudioInputManager: ObservableObject {
 
     private let apiKey: String
     private let audioEngine = AVAudioEngine() // Main engine likely moved to IdentityManager in future refactor, but kept here for now
-    // Ideally we share one engine. For this step, we'll let AudioInputManager control the engine and feed IdentityManager.
-    // However, IdentityManager also needs to control engine for calibration when this manager isn't running.
-    // To avoid conflict, let's SHARE the engine or have IdentityManager own it.
-    // Plan: IdentityManager owns the engine. This manager requests stream from it?
-    // OR: AudioInputManager owns engine, and passes buffers to IdentityManager.
-    // Let's go with: AudioInputManager owns engine (since it handles transcription stream), 
-    // and IdentityManager is "active" only when we feed it.
-    // BUT IdentityManager needs to record for calibration when AudioInputManager's "Start Transcribing" isn't active.
-    
-    // DECISION: VoiceIdentityManager should probably own the AVAudioEngine to be the single source of truth as per KI.
-    // Refactoring AudioInputManager to USE VoiceIdentityManager's engine or coordinate.
-    // For minimal breakage: AudioInputManager keeps engine, but we ensure they don't fight.
-    // Better: VoiceIdentityManager exposes `startMonitoring()` which starts engine.
     
     private let inputBus: AVAudioNodeBus = 0
     private var webSocketTask: URLSessionWebSocketTask?
@@ -54,17 +46,12 @@ final class AudioInputManager: ObservableObject {
     init(apiKey: String, identityManager: VoiceIdentityManager) {
         self.apiKey = apiKey
         self.identityManager = identityManager
+        super.init()
         requestPermissions()
     }
     
     func startMonitoring() {
         guard !audioEngine.isRunning else { return }
-        
-        // Ensure IdentityManager is ready (calibrated)
-        guard identityManager.calibrationState == .calibrated else {
-            print("⚠️ Cannot start monitoring: Not calibrated")
-            return
-        }
         
         setupWebSocket()
         
@@ -75,7 +62,7 @@ final class AudioInputManager: ObservableObject {
             isRunning = true
             
             // Notify IdentityManager we are starting (so it can reset state if needed)
-            identityManager.startMonitoring()
+            // identityManager.startMonitoring() // Removed as it's no-op now
             
         } catch {
             print("Failed to start audio engine:", error)
@@ -93,7 +80,7 @@ final class AudioInputManager: ObservableObject {
         isRunning = false
         
         // Notify IdentityManager
-        identityManager.stopMonitoring()
+        // identityManager.stopMonitoring() // Removed
         
         // Close WebSocket
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
@@ -117,11 +104,24 @@ final class AudioInputManager: ObservableObject {
         var request = URLRequest(url: url)
         request.setValue("Token \(apiKey)", forHTTPHeaderField: "Authorization")
         
-        let session = URLSession(configuration: .default)
+        let session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
         webSocketTask = session.webSocketTask(with: request)
         webSocketTask?.resume()
         
+        ping() // Keep connection alive
         receiveMessage()
+    }
+    
+    private func ping() {
+        webSocketTask?.sendPing { error in
+            if let error = error {
+                print("WebSocket Ping Error: \(error)")
+            } else if self.isRunning {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 5) { [weak self] in
+                    self?.ping()
+                }
+            }
+        }
     }
     
     private func receiveMessage() {
@@ -160,7 +160,7 @@ final class AudioInputManager: ObservableObject {
                 
                 Task { @MainActor in
                     // Speaker ID comes from local IdentityManager now
-                    let speakerID = self.identityManager.isUserSpeaking ? 0 : (self.identityManager.isPartnerSpeaking ? 1 : 0) // Default to user if unsure
+                    let speakerID = self.currentSpeaker ?? 0 // Default to user if unsure
                     
                     if isFinal {
                         if !newTranscript.isEmpty {
@@ -313,5 +313,16 @@ final class AudioInputManager: ObservableObject {
 
     private func requestPermissions() {
         AVAudioSession.sharedInstance().requestRecordPermission { _ in }
+    }
+}
+
+extension AudioInputManager: URLSessionWebSocketDelegate {
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+        print("✅ WebSocket Connected")
+    }
+    
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        let reasonString = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "No reason"
+        print("❌ WebSocket Closed: Code \(closeCode.rawValue), Reason: \(reasonString)")
     }
 }

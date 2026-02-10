@@ -14,13 +14,12 @@ struct ContentView: View {
     @StateObject private var audioManager: AudioInputManager
     @Environment(ConversationStore.self) private var conversationStore
     
-    @State private var selectedTab: Tab = .setup // Default to setup? Or transcribe but show calibration needed?
+    @State private var selectedTab: Tab = .transcribe
     @State private var showingSaveConfirmation = false
 
     enum Tab {
         case transcribe
         case history
-        case setup
     }
     
     init() {
@@ -31,13 +30,6 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            // MARK: - Setup Tab (Calibration)
-            CalibrationView(identityManager: identityManager)
-                .tabItem {
-                    Label("Setup", systemImage: "gearshape")
-                }
-                .tag(Tab.setup)
-            
             // MARK: - Transcribe Tab
             transcribeView
                 .tabItem {
@@ -138,52 +130,48 @@ struct ContentView: View {
             
             Spacer()
             
-            // Large Start/Stop Button
-            if identityManager.calibrationState == .calibrated {
-                Button(action: {
-                    if audioManager.isRunning {
-                        audioManager.stopMonitoring()
-                    } else {
-                        audioManager.startMonitoring()
-                    }
-                }) {
-                    HStack(spacing: 12) {
-                        Image(systemName: audioManager.isRunning ? "stop.fill" : "mic.fill")
-                            .font(.title2)
-                        Text(audioManager.isRunning ? "Stop Transcribing" : "Start Transcribing")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(audioManager.isRunning ? Color.red : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(16)
-                }
-                .padding()
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundColor(.orange)
-                    Text("Calibration Required")
-                        .font(.headline)
-                    Text("Please go to the Setup tab to calibrate voices before transcribing.")
+            // Active Speaker Indicator (Sortformer)
+            if audioManager.isRunning {
+                VStack {
+                    Text("Active: \(identityManager.currentSpeaker ?? "None")")
                         .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
                     
-                    Button("Go to Setup") {
-                        selectedTab = .setup
+                    // Simple viz of 4 slots
+                    HStack(spacing: 4) {
+                        ForEach(0..<4) { index in
+                            let prob = identityManager.speakerProbabilities.indices.contains(index) ? identityManager.speakerProbabilities[index] : 0
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(prob > 0.5 ? Color.green : Color.gray.opacity(0.3))
+                                .frame(width: 20, height: CGFloat(max(4, prob * 20)))
+                        }
                     }
-                    .buttonStyle(.bordered)
                 }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(.ultraThinMaterial)
-                .cornerRadius(16)
-                .padding()
+                .padding(.bottom, 8)
             }
+            
+            // Large Start/Stop Button
+            Button(action: {
+                if audioManager.isRunning {
+                    audioManager.stopMonitoring()
+                } else {
+                    audioManager.startMonitoring()
+                }
+            }) {
+                HStack(spacing: 12) {
+                    Image(systemName: audioManager.isRunning ? "stop.fill" : "mic.fill")
+                        .font(.title2)
+                    Text(audioManager.isRunning ? "Stop Transcribing" : "Start Transcribing")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(audioManager.isRunning ? Color.red : Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(16)
+            }
+            .padding()
         }
         .background(.clear)
         .alert("Conversation Saved", isPresented: $showingSaveConfirmation) {
@@ -203,115 +191,6 @@ struct ContentView: View {
     private func clearConversation() {
         audioManager.chatHistory.removeAll()
         audioManager.transcript = ""
-    }
-}
-
-// MARK: - Calibration View
-struct CalibrationView: View {
-    @ObservedObject var identityManager: VoiceIdentityManager
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(header: Text("Instructions")) {
-                    Text("To identify speakers correctly, blubble needs to learn your voice and your partner's voice.")
-                        .font(.body)
-                        .listRowBackground(Color.clear)
-                }
-                
-                Section(header: Text("Step 1: User Voice")) {
-                    if identityManager.calibrationState == .userSaved || identityManager.calibrationState == .calibrated || identityManager.calibrationState == .partnerSaved {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("User Voice Configured")
-                        }
-                    } else {
-                        Button(action: {
-                            if identityManager.isRecordingEnrollment {
-                                identityManager.cancelCalibration() // Stop
-                            } else {
-                                identityManager.startCalibratingUser()
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForUser ? "stop.circle.fill" : "mic.fill")
-                                    .foregroundColor(identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForUser ? .red : .blue)
-                                VStack(alignment: .leading) {
-                                    Text(identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForUser ? "Stop & Save (Recording...)" : "Record User Voice (5s)")
-                                        .foregroundColor(identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForUser ? .red : .primary)
-                                    if identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForUser {
-                                        Text("Speak naturally...")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                Section(header: Text("Step 2: Partner Voice")) {
-                    if identityManager.calibrationState == .partnerSaved || identityManager.calibrationState == .calibrated {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("Partner Voice Configured")
-                        }
-                    } else {
-                        Button(action: {
-                            if identityManager.isRecordingEnrollment {
-                                identityManager.cancelCalibration()
-                            } else {
-                                identityManager.startCalibratingPartner()
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForPartner ? "stop.circle.fill" : "mic.fill")
-                                    .foregroundColor(identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForPartner ? .red : .orange)
-                                VStack(alignment: .leading) {
-                                    Text(identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForPartner ? "Stop & Save (Recording...)" : "Record Partner Voice (5s)")
-                                         .foregroundColor(identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForPartner ? .red : .primary)
-                                    if identityManager.isRecordingEnrollment && identityManager.calibrationState == .listeningForPartner {
-                                        Text("Ask partner to speak...")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                        .disabled(identityManager.calibrationState == .uncalibrated || identityManager.calibrationState == .listeningForUser)
-                    }
-                }
-                
-                if case .error(let msg) = identityManager.calibrationState {
-                    Section {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.red)
-                            Text(msg)
-                                .foregroundColor(.red)
-                        }
-                    }
-                }
-                
-                if identityManager.calibrationState == .calibrated {
-                    Section {
-                        HStack {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundColor(.green)
-                                .font(.title)
-                            Text("Calibration Complete")
-                                .font(.headline)
-                                .foregroundStyle(.green)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .listRowBackground(Color.clear)
-                    }
-                }
-            }
-            .navigationTitle("Voice Setup")
-        }
     }
 }
 
