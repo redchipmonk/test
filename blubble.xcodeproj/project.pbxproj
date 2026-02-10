@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		E113C26A2F2AF7AD007D3DF3 /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = E113C2692F2AF7AD007D3DF3 /* RealityKitContent */; };
+		E17513F02F3B14F200E6C616 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = E17513EF2F3B14F200E6C616 /* FluidAudio */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +42,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E17513F02F3B14F200E6C616 /* FluidAudio in Frameworks */,
 				E113C26A2F2AF7AD007D3DF3 /* RealityKitContent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -94,6 +96,7 @@
 			name = blubble;
 			packageProductDependencies = (
 				E113C2692F2AF7AD007D3DF3 /* RealityKitContent */,
+				E17513EF2F3B14F200E6C616 /* FluidAudio */,
 			);
 			productName = blubble;
 			productReference = E113C2642F2AF7AD007D3DF3 /* blubble.app */;
@@ -123,6 +126,9 @@
 			);
 			mainGroup = E113C25B2F2AF7AD007D3DF3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E17513EE2F3B14F200E6C616 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E113C2652F2AF7AD007D3DF3 /* Products */;
 			projectDirPath = "";
@@ -358,10 +364,26 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		E17513EE2F3B14F200E6C616 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		E113C2692F2AF7AD007D3DF3 /* RealityKitContent */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RealityKitContent;
+		};
+		E17513EF2F3B14F200E6C616 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E17513EE2F3B14F200E6C616 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

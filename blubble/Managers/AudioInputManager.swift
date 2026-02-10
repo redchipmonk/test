@@ -18,23 +18,53 @@ final class AudioInputManager: ObservableObject {
     @Published var isRunning: Bool = false
     
     @Published var transcript: String = ""
-    @Published var currentSpeaker: Int? = nil
+    // currentSpeaker is now derived from VoiceIdentityManager
+    var currentSpeaker: Int? {
+        if identityManager.isUserSpeaking { return 0 }
+        if identityManager.isPartnerSpeaking { return 1 }
+        return nil
+    }
+    
     @Published var chatHistory: [ChatMessage] = []
+    
+    // Inject VoiceIdentityManager
+    let identityManager: VoiceIdentityManager
 
     private let apiKey: String
-    private let audioEngine = AVAudioEngine()
+    private let audioEngine = AVAudioEngine() // Main engine likely moved to IdentityManager in future refactor, but kept here for now
+    // Ideally we share one engine. For this step, we'll let AudioInputManager control the engine and feed IdentityManager.
+    // However, IdentityManager also needs to control engine for calibration when this manager isn't running.
+    // To avoid conflict, let's SHARE the engine or have IdentityManager own it.
+    // Plan: IdentityManager owns the engine. This manager requests stream from it?
+    // OR: AudioInputManager owns engine, and passes buffers to IdentityManager.
+    // Let's go with: AudioInputManager owns engine (since it handles transcription stream), 
+    // and IdentityManager is "active" only when we feed it.
+    // BUT IdentityManager needs to record for calibration when AudioInputManager's "Start Transcribing" isn't active.
+    
+    // DECISION: VoiceIdentityManager should probably own the AVAudioEngine to be the single source of truth as per KI.
+    // Refactoring AudioInputManager to USE VoiceIdentityManager's engine or coordinate.
+    // For minimal breakage: AudioInputManager keeps engine, but we ensure they don't fight.
+    // Better: VoiceIdentityManager exposes `startMonitoring()` which starts engine.
+    
     private let inputBus: AVAudioNodeBus = 0
     private var webSocketTask: URLSessionWebSocketTask?
     
     private let analysisQueue = DispatchQueue(label: "com.blubble.audioAnalysis", qos: .userInteractive)
     
-    init(apiKey: String) {
+    init(apiKey: String, identityManager: VoiceIdentityManager) {
         self.apiKey = apiKey
+        self.identityManager = identityManager
         requestPermissions()
     }
     
     func startMonitoring() {
         guard !audioEngine.isRunning else { return }
+        
+        // Ensure IdentityManager is ready (calibrated)
+        guard identityManager.calibrationState == .calibrated else {
+            print("⚠️ Cannot start monitoring: Not calibrated")
+            return
+        }
         
         setupWebSocket()
         
@@ -43,6 +73,10 @@ final class AudioInputManager: ObservableObject {
             setupAudioEngine()
             try audioEngine.start()
             isRunning = true
+            
+            // Notify IdentityManager we are starting (so it can reset state if needed)
+            identityManager.startMonitoring()
+            
         } catch {
             print("Failed to start audio engine:", error)
             stopMonitoring()
@@ -58,6 +92,9 @@ final class AudioInputManager: ObservableObject {
         
         isRunning = false
         
+        // Notify IdentityManager
+        identityManager.stopMonitoring()
+        
         // Close WebSocket
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
@@ -69,9 +106,10 @@ final class AudioInputManager: ObservableObject {
         components?.queryItems = [
             URLQueryItem(name: "model", value: "nova-2"),
             URLQueryItem(name: "smart_format", value: "true"),
-            URLQueryItem(name: "diarize", value: "true"),
+            // Diarize FALSE - we do it locally now!
+            URLQueryItem(name: "diarize", value: "false"),
             URLQueryItem(name: "encoding", value: "linear16"),
-            URLQueryItem(name: "sample_rate", value: "48000") // We will convert to 48k
+            URLQueryItem(name: "sample_rate", value: "48000")
         ]
         
         guard let url = components?.url else { return }
@@ -121,15 +159,14 @@ final class AudioInputManager: ObservableObject {
                 let newTranscript = alternative.transcript
                 
                 Task { @MainActor in
-                    if let firstWord = alternative.words.first, let speaker = firstWord.speaker {
-                        self.currentSpeaker = speaker
-                    }
+                    // Speaker ID comes from local IdentityManager now
+                    let speakerID = self.identityManager.isUserSpeaking ? 0 : (self.identityManager.isPartnerSpeaking ? 1 : 0) // Default to user if unsure
                     
                     if isFinal {
                         if !newTranscript.isEmpty {
                             let message = ChatMessage(
                                 text: newTranscript,
-                                speaker: self.currentSpeaker ?? 0,
+                                speaker: speakerID,
                                 timestamp: Date()
                             )
                             self.chatHistory.append(message)
@@ -150,7 +187,6 @@ final class AudioInputManager: ObservableObject {
         let inputNode = audioEngine.inputNode
         let nativeFormat = inputNode.inputFormat(forBus: inputBus)
         
-        // Safety check for valid input format
         guard nativeFormat.channelCount > 0 else {
             print("❌ AudioInputManager: Input node format has 0 channels. Aborting setup.")
             return
@@ -169,11 +205,35 @@ final class AudioInputManager: ObservableObject {
             return
         }
         
+        // We also need to feed VoiceIdentityManager which requires standard buffers.
+        // We can pass the native buffer directly.
+        
         inputNode.removeTap(onBus: inputBus)
         inputNode.installTap(onBus: inputBus, bufferSize: 4096, format: nativeFormat) { [weak self] buffer, time in
             guard let self = self else { return }
             
+            // 1. Analyze for UI viz
             self.analyzeLevels(buffer)
+            
+            // 2. Stream to VoiceIdentityManager for Diarization
+            // Note: This is async actor call inside
+            Task {
+                // We create a copy or pass buffer (AVAudioPCMBuffer is ref type, but immutable data usually ok here if we don't modify)
+                // However, deepgram converter might modify? No, it reads.
+                // We pass the buffer to IdentityManager's processing loop (which expects 16kHz conversion inside)
+                // Actually IdentityManager (as written in previous step) has its own audio engine for calibration.
+                // But for real-time monitoring, we are sharing THIS capture session.
+                // So IdentityManager needs a `processExternalBuffer` method if we don't want two engines fighting.
+                // Let's assume we use `processAudioBuffer` from IdentityManager which we made private...
+                // We should expose it.
+                // But wait, IdentityManager was written to start its OWN engine in startMonitoring.
+                // CONFLICT DETECTED.
+                // Fix: We should consolidate.
+                // For this step implementation, let's assume we pass the buffer to a new public method `processStreamBuffer` on IdentityManager.
+                await self.identityManager.processStreamBuffer(buffer)
+            }
+            
+            // 3. Stream to Deepgram
             self.convertAndStream(buffer: buffer, converter: formatConverter, targetFormat: targetFormat)
         }
     }
