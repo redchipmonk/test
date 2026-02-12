@@ -10,6 +10,7 @@ import RealityKit
 import RealityKitContent
 
 struct ContentView: View {
+    @StateObject private var identityManager = VoiceIdentityManager()
     @StateObject private var audioManager: AudioInputManager
     @Environment(ConversationStore.self) private var conversationStore
     
@@ -22,7 +23,9 @@ struct ContentView: View {
     }
     
     init() {
-        _audioManager = StateObject(wrappedValue: AudioInputManager(apiKey: "9ef63010c60b46f5d8fa0a550b9f418509edb84e"))
+        let identity = VoiceIdentityManager()
+        _identityManager = StateObject(wrappedValue: identity)
+        _audioManager = StateObject(wrappedValue: AudioInputManager(apiKey: "9ef63010c60b46f5d8fa0a550b9f418509edb84e", identityManager: identity))
     }
 
     var body: some View {
@@ -42,6 +45,10 @@ struct ContentView: View {
                 .tag(Tab.history)
         }
         .background(.clear)
+        .task {
+            // Start loading models immediately
+            await identityManager.initialize()
+        }
     }
     
     // MARK: - Transcribe View
@@ -122,6 +129,26 @@ struct ContentView: View {
             }
             
             Spacer()
+            
+            // Active Speaker Indicator (Sortformer)
+            if audioManager.isRunning {
+                VStack {
+                    Text("Active: \(identityManager.currentSpeaker ?? "None")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    // Simple viz of 4 slots
+                    HStack(spacing: 4) {
+                        ForEach(0..<4) { index in
+                            let prob = identityManager.speakerProbabilities.indices.contains(index) ? identityManager.speakerProbabilities[index] : 0
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(prob > 0.5 ? Color.green : Color.gray.opacity(0.3))
+                                .frame(width: 20, height: CGFloat(max(4, prob * 20)))
+                        }
+                    }
+                }
+                .padding(.bottom, 8)
+            }
             
             // Large Start/Stop Button
             Button(action: {
