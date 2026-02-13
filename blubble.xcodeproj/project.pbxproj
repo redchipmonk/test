@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5198C3C92F3F12A100163087 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 5198C3C82F3F12A100163087 /* Hub */; };
+		5198C3CB2F3F12A100163087 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 5198C3CA2F3F12A100163087 /* Tokenizers */; };
+		5198C3CD2F3F12A100163087 /* Transformers in Frameworks */ = {isa = PBXBuildFile; productRef = 5198C3CC2F3F12A100163087 /* Transformers */; };
 		E113C26A2F2AF7AD007D3DF3 /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = E113C2692F2AF7AD007D3DF3 /* RealityKitContent */; };
 		E17513F02F3B14F200E6C616 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = E17513EF2F3B14F200E6C616 /* FluidAudio */; };
 /* End PBXBuildFile section */
@@ -42,6 +45,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5198C3CB2F3F12A100163087 /* Tokenizers in Frameworks */,
+				5198C3C92F3F12A100163087 /* Hub in Frameworks */,
+				5198C3CD2F3F12A100163087 /* Transformers in Frameworks */,
 				E17513F02F3B14F200E6C616 /* FluidAudio in Frameworks */,
 				E113C26A2F2AF7AD007D3DF3 /* RealityKitContent in Frameworks */,
 			);
@@ -97,6 +103,9 @@
 			packageProductDependencies = (
 				E113C2692F2AF7AD007D3DF3 /* RealityKitContent */,
 				E17513EF2F3B14F200E6C616 /* FluidAudio */,
+				5198C3C82F3F12A100163087 /* Hub */,
+				5198C3CA2F3F12A100163087 /* Tokenizers */,
+				5198C3CC2F3F12A100163087 /* Transformers */,
 			);
 			productName = blubble;
 			productReference = E113C2642F2AF7AD007D3DF3 /* blubble.app */;
@@ -128,6 +137,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E17513EE2F3B14F200E6C616 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				5198C3C72F3F12A100163087 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E113C2652F2AF7AD007D3DF3 /* Products */;
@@ -369,6 +379,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5198C3C72F3F12A100163087 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.6;
+			};
+		};
 		E17513EE2F3B14F200E6C616 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
@@ -380,6 +398,21 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		5198C3C82F3F12A100163087 /* Hub */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5198C3C72F3F12A100163087 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Hub;
+		};
+		5198C3CA2F3F12A100163087 /* Tokenizers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5198C3C72F3F12A100163087 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Tokenizers;
+		};
+		5198C3CC2F3F12A100163087 /* Transformers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5198C3C72F3F12A100163087 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Transformers;
+		};
 		E113C2692F2AF7AD007D3DF3 /* RealityKitContent */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RealityKitContent;

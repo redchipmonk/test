@@ -212,4 +212,5 @@ struct ChatBubble: View {
             if !isUser { Spacer() }
         }
     }
+
 }
