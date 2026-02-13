@@ -27,16 +27,16 @@ class EmotionClassifier {
         }
     }
     
-    func predictEmotion(for text: String) -> String {
+    func predictEmotion(for text: String) -> Emotion {
         print("predicting")
-        guard let inputs = tokenizer.tokenize(text) else { return "unknown" }
+        guard let inputs = tokenizer.tokenize(text) else { return .neutral }
         if let emotion = self.classify(inputIds: inputs.inputIds, attentionMask: inputs.attentionMask) {
             return emotion
         }
-        return "unknown"
+        return .neutral
     }
     
-    func classify(inputIds: [Int32], attentionMask: [Int32]) -> String? {
+    func classify(inputIds: [Int32], attentionMask: [Int32]) -> Emotion? {
         print("classifying")
         do {
             let size = 128
@@ -63,8 +63,8 @@ class EmotionClassifier {
         }
     }
     
-    private func interpretResults(_ logits: MLMultiArray) -> String? {
-        let labels = ["sadness", "joy", "love", "anger", "fear", "surprise"]
+    private func interpretResults(_ logits: MLMultiArray) -> Emotion? {
+        let labels: [Emotion] = [.sadness, .joy, .love, .anger, .fear, .surprise]
         let threshold = 0.6
         
         let T: Double = 2.0
@@ -76,7 +76,7 @@ class EmotionClassifier {
         if let maxProb = probabilities.max(), let bestIndex = probabilities.firstIndex(of: maxProb) {
             print(maxProb)
             if maxProb < threshold {
-                return "neutral"
+                return .neutral
             }
             return labels[bestIndex]
         }
