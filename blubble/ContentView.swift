@@ -171,6 +171,7 @@ struct ChatBubble: View {
     let text: String
     let speaker: Int
     let isPending: Bool
+    let emotion: Emotion
     
     var isUser: Bool {
         return speaker == 0

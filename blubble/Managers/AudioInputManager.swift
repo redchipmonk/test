@@ -170,11 +170,12 @@ final class AudioInputManager: NSObject, ObservableObject {
 
                             let emotion = emotionClassifier.predictEmotion(for: newTranscript)
                             let formatted = "\(newTranscript) + \(emotion.rawValue)"
-                            print(emotion.rawValue)
+                
                             let message = ChatMessage(
                                 text: formatted,
                                 speaker: speakerID,
-                                timestamp: Date()
+                                timestamp: Date(),
+                                emotion: emotion
                             )
                             
                             self.chatHistory.append(message)

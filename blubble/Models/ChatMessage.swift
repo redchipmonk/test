@@ -5,4 +5,5 @@ struct ChatMessage: Identifiable, Equatable {
     let text: String
     let speaker: Int
     let timestamp: Date
+    let emotion: Emotion
 }
