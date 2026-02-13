@@ -65,17 +65,19 @@ class EmotionClassifier {
     
     private func interpretResults(_ logits: MLMultiArray) -> String? {
         let labels = ["sadness", "joy", "love", "anger", "fear", "surprise"]
-        let count = logits.count
-        var bestIndex = 0
-        var highest = -Double.infinity
-        for i in 0..<count {
-            let score = logits[i].doubleValue
-            if score > highest {
-                highest = score
-                bestIndex = i
+        let threshold = 0.6
+        
+        let T: Double = 2.0
+        let temp = (0..<logits.count).map { logits[$0].doubleValue / T}
+        let scores = temp.map { exp($0) }
+        let sum = scores.reduce(0, +)
+        let probabilities = scores.map { $0 / sum }
+        
+        if let maxProb = probabilities.max(), let bestIndex = probabilities.firstIndex(of: maxProb) {
+            print(maxProb)
+            if maxProb < threshold {
+                return "neutral"
             }
-        }
-        if bestIndex < labels.count {
             return labels[bestIndex]
         }
         return nil
