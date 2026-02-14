@@ -174,27 +174,36 @@ struct ChatBubble: View {
     let isPending: Bool
     let emotion: Emotion
     
+    @State private var appeared = false
+    @State private var shakeTrigger = false
+    
     var isUser: Bool {
         return speaker == 0
+    }
+    
+    private var bubbleColor: Color {
+        if appeared && emotion == .anger { return Color(red: 0.75, green: 0, blue: 0) }
+        return isUser ? .blue : Color(.systemGray5)
+    }
+    
+    private var textColor: Color {
+        if appeared && (isUser || emotion == .anger) { return .white }
+        return .primary
     }
     
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if isUser { Spacer() }
             
-            if !isUser {
-                Circle()
-                    .fill(Color.orange)
-                    .frame(width: 32, height: 32)
-                    .overlay(Text("\(speaker)").font(.caption).foregroundColor(.white))
-            }
+            if !isUser { avatarView(label: "\(speaker)", color: .orange) }
             
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
                 Text(text)
                     .padding(12)
-                    .background(isUser ? Color.blue.opacity(0.9) : Color(.systemGray5).opacity(0.9))
-                    .foregroundColor(isUser ? .white : .primary)
+                    .background(bubbleColor.opacity(0.9))
+                    .foregroundColor(textColor)
                     .cornerRadius(16)
+                    .animation(.easeInOut(duration: 0.8), value: appeared)
                     .opacity(isPending ? 0.7 : 1.0)
                 
                 if isPending {
@@ -203,16 +212,68 @@ struct ChatBubble: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .violentShake(trigger: shakeTrigger)
             
-            if isUser {
-                Circle()
-                    .fill(Color.blue)
-                    .frame(width: 32, height: 32)
-                    .overlay(Text("0").font(.caption).foregroundColor(.white))
-            }
-            
+            if isUser { avatarView(label: "0", color: .blue) }
             if !isUser { Spacer() }
         }
+        .onAppear {
+            appeared = true
+            if emotion == .anger {
+                withAnimation(.easeIn(duration: 0.05)) {
+                    shakeTrigger.toggle()
+                }
+            }
+        }
     }
+    
+    @ViewBuilder
+    private func avatarView(label: String, color: Color) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: 32, height: 32)
+            .overlay(
+                Text(label)
+                    .font(.caption)
+                    .foregroundColor(.white)
+            )
+    }
+}
 
+struct ViolentShake: ViewModifier {
+    var trigger: Bool
+    
+    func body(content: Content) -> some View {
+        content
+            .keyframeAnimator(
+                initialValue: CGSize.zero,
+                trigger: trigger
+            ) { view, offset in
+                view.offset(offset)
+            } keyframes: { _ in
+                KeyframeTrack(\.width) {
+                    LinearKeyframe( 22, duration: 0.056)
+                    LinearKeyframe(-24, duration: 0.070)
+                    LinearKeyframe( 15, duration: 0.044)
+                    LinearKeyframe(-18, duration: 0.062)
+                    LinearKeyframe(  8, duration: 0.052)
+                    LinearKeyframe(  0, duration: 0.090)
+                }
+
+                KeyframeTrack(\.height) {
+                    LinearKeyframe(-14, duration: 0.042)
+                    LinearKeyframe( 17, duration: 0.076)
+                    LinearKeyframe(-11, duration: 0.054)
+                    LinearKeyframe(  9, duration: 0.068)
+                    LinearKeyframe( -4, duration: 0.040)
+                    LinearKeyframe(  0, duration: 0.100)
+                }
+            }
+    }
+}
+
+extension View {
+    func violentShake(trigger: Bool) -> some View {
+        modifier(ViolentShake(trigger: trigger))
+    }
 }
