@@ -10,6 +10,7 @@ class ContentViewModel {
     private let logger = Logger(subsystem: "team1.blubble", category: "ContentViewModel")
     
     // Services
+    private let emotionClassifier = EmotionClassifier()
     private let audioCaptureService: AudioCaptureProtocol
     private let speechRecognitionService: SpeechRecognitionProtocol
     private let identityManager: any VoiceIdentityManaging
@@ -103,7 +104,9 @@ class ContentViewModel {
             self.transcript = text
         case .final(let text):
             let speakerID = getSpeakerID()
-            let message = ChatMessage(text: text, speaker: speakerID, timestamp: Date())
+            let emotion = emotionClassifier.predictEmotion(for: text)
+            print(emotion)
+            let message = ChatMessage(text: text, speaker: speakerID, timestamp: Date(), emotion: emotion)
             self.chatHistory.append(message)
             self.transcript = ""
         case .error(let error):

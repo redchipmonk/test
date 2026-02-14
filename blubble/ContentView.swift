@@ -83,7 +83,7 @@ struct ContentView: View {
                 ScrollView {
                     LazyVStack(spacing: 16) {
                         ForEach(viewModel.chatHistory) { message in
-                            ChatBubble(text: message.text, speaker: message.speaker, isPending: false)
+                            ChatBubble(text: message.text, speaker: message.speaker, isPending: false, emotion: message.emotion)
                                 .id(message.id)
                         }
                         
@@ -92,7 +92,8 @@ struct ContentView: View {
                             ChatBubble(
                                 text: viewModel.transcript,
                                 speaker: Int(viewModel.currentSpeaker?.components(separatedBy: " ").last ?? "") ?? 0,
-                                isPending: true
+                                isPending: true,
+                                emotion: Emotion.neutral
                             )
                             .id("pending")
                         }
