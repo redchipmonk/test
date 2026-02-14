@@ -13,7 +13,6 @@ final class VoiceIdentityManager: VoiceIdentityManaging {
     @Published var isInitializing: Bool = false
     
     private let diarizer: any AudioDiarizing
-    private let audioConverter = AudioConverter()
     
     init(diarizer: any AudioDiarizing) {
         self.diarizer = diarizer
@@ -33,39 +32,11 @@ final class VoiceIdentityManager: VoiceIdentityManaging {
     
     func processStreamBuffer(_ buffer: AVAudioPCMBuffer) async {
         do {
-            logger.debug("Input buffer: \(buffer.format.sampleRate) Hz, \(buffer.format.channelCount) channel(s)")
-            
-            let convertedSamples = try audioConverter.resampleBuffer(buffer)
-            
-            logger.debug("Converted to 16 kHz: \(convertedSamples.count) samples")
-            
-            let targetFormat = AVAudioFormat(
-                commonFormat: .pcmFormatFloat32,
-                sampleRate: 16000,
-                channels: 1,
-                interleaved: false
-            )!
-            
-            guard let convertedBuffer = AVAudioPCMBuffer(
-                pcmFormat: targetFormat,
-                frameCapacity: AVAudioFrameCount(convertedSamples.count)
-            ) else {
-                logger.warning("Failed to create 16kHz buffer")
-                return
-            }
-            
-            convertedBuffer.frameLength = AVAudioFrameCount(convertedSamples.count)
-            if let floatData = convertedBuffer.floatChannelData?[0] {
-                convertedSamples.withUnsafeBufferPointer { ptr in
-                    floatData.update(from: ptr.baseAddress!, count: convertedSamples.count)
-                }
-            }
-            
-            if let result = try await diarizer.process(buffer: convertedBuffer) {
+            if let result = try await diarizer.process(nativeBuffer: buffer) {
                 updateState(from: result)
             }
         } catch {
-            logger.error("Audio conversion or processing error: \(error.localizedDescription)")
+            logger.error("Diarization processing error: \(error.localizedDescription)")
         }
     }
     

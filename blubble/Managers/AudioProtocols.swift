@@ -6,7 +6,7 @@ import Combine
 // MARK: - Audio Diarizer Protocol
 protocol AudioDiarizing: Actor {
     func loadModel() async throws
-    func process(buffer: AVAudioPCMBuffer) async throws -> SortformerChunkResult?
+    func process(nativeBuffer: AVAudioPCMBuffer) async throws -> SortformerChunkResult?
 }
 
 // MARK: - Voice Identity Manager Protocol
@@ -25,8 +25,6 @@ protocol AudioInputManaging: ObservableObject {
     var transcript: String { get }
     var chatHistory: [ChatMessage] { get }
     var currentSpeaker: Int? { get }
-    var currentRMS: Float { get }
-    var currentZCR: Float { get }
     
     func startMonitoring()
     func stopMonitoring()

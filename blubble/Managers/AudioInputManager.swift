@@ -5,16 +5,13 @@ import Speech
 import Combine
 import OSLog
 
-@MainActor
 final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
     private let logger = Logger(subsystem: "team1.blubble", category: "AudioInputManager")
     
-    @Published var currentRMS: Float = 0.0
-    @Published var currentZCR: Float = 0.0
-    @Published var isRunning: Bool = false
+    @MainActor @Published var isRunning: Bool = false
     
-    @Published var transcript: String = ""
-    var currentSpeaker: Int? {
+    @MainActor @Published var transcript: String = ""
+    @MainActor var currentSpeaker: Int? {
         if let speakerString = identityManager.currentSpeaker {
             if let id = Int(speakerString.components(separatedBy: " ").last ?? "") {
                 return id - 1
@@ -23,7 +20,7 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
         return nil
     }
     
-    @Published var chatHistory: [ChatMessage] = []
+    @MainActor @Published var chatHistory: [ChatMessage] = []
     
     let identityManager: any VoiceIdentityManaging
 
@@ -33,8 +30,6 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
     private let inputBus: AVAudioNodeBus = 0
     private var webSocketTask: URLSessionWebSocketTask?
     
-    private let analysisQueue = DispatchQueue(label: "com.blubble.audioAnalysis", qos: .userInteractive)
-    
     init(apiKey: String, identityManager: any VoiceIdentityManaging) {
         self.apiKey = apiKey
         self.identityManager = identityManager
@@ -42,7 +37,7 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
         requestPermissions()
     }
     
-    func startMonitoring() {
+    @MainActor func startMonitoring() {
         guard !audioEngine.isRunning else { return }
         
         setupWebSocket()
@@ -58,7 +53,7 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
         }
     }
 
-    func stopMonitoring() {
+    @MainActor func stopMonitoring() {
         if audioEngine.isRunning {
             audioEngine.inputNode.removeTap(onBus: inputBus)
             audioEngine.stop()
@@ -70,7 +65,7 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
         webSocketTask = nil
     }
     
-    private func setupWebSocket() {
+    @MainActor private func setupWebSocket() {
         var components = URLComponents(string: "wss://api.deepgram.com/v1/listen")
         components?.queryItems = [
             URLQueryItem(name: "model", value: "nova-2"),
@@ -93,19 +88,25 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
         receiveMessage()
     }
     
-    private func ping() {
+    @MainActor private func ping() {
         webSocketTask?.sendPing { error in
             if let error = error {
                 self.logger.error("WebSocket Ping Error: \(error.localizedDescription)")
-            } else if self.isRunning {
-                DispatchQueue.global().asyncAfter(deadline: .now() + 5) { [weak self] in
-                    self?.ping()
+            } else {
+                Task { @MainActor in
+                    if self.isRunning {
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 5) { [weak self] in
+                            Task { @MainActor in
+                                self?.ping()
+                            }
+                        }
+                    }
                 }
             }
         }
     }
     
-    private func receiveMessage() {
+    @MainActor private func receiveMessage() {
         webSocketTask?.receive { [weak self] result in
             guard let self = self else { return }
             
@@ -122,14 +123,16 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
                     break
                 }
                 
-                if self.isRunning {
-                    self.receiveMessage()
+                Task { @MainActor in
+                    if self.isRunning {
+                        self.receiveMessage()
+                    }
                 }
             }
         }
     }
     
-    private func handleMessage(_ jsonString: String) {
+    @MainActor private func handleMessage(_ jsonString: String) {
         guard let data = jsonString.data(using: .utf8) else { return }
         
         do {
@@ -140,22 +143,20 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
                 let newTranscript = alternative.transcript
                 logger.debug("Deepgram received: '\(newTranscript)' (is_final: \(isFinal))")
                 
-                Task { @MainActor in
-                    let speakerID = self.currentSpeaker ?? 0
-                    
-                    if isFinal {
-                        if !newTranscript.isEmpty {
-                            let message = ChatMessage(
-                                text: newTranscript,
-                                speaker: speakerID,
-                                timestamp: Date()
-                            )
-                            self.chatHistory.append(message)
-                            self.transcript = ""
-                        }
-                    } else {
-                        self.transcript = newTranscript
+                let speakerID = self.currentSpeaker ?? 0
+                
+                if isFinal {
+                    if !newTranscript.isEmpty {
+                        let message = ChatMessage(
+                            text: newTranscript,
+                            speaker: speakerID,
+                            timestamp: Date()
+                        )
+                        self.chatHistory.append(message)
+                        self.transcript = ""
                     }
+                } else {
+                    self.transcript = newTranscript
                 }
             }
         } catch {
@@ -163,7 +164,7 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
         }
     }
     
-    private func setupAudioEngine() {
+    @MainActor private func setupAudioEngine() {
         let inputNode = audioEngine.inputNode
         let nativeFormat = inputNode.inputFormat(forBus: inputBus)
         
@@ -187,8 +188,6 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
         inputNode.removeTap(onBus: inputBus)
         inputNode.installTap(onBus: inputBus, bufferSize: 4096, format: nativeFormat) { [weak self] buffer, time in
             guard let self = self else { return }
-            
-            self.analyzeLevels(buffer)
             
             Task {
                 await self.identityManager.processStreamBuffer(buffer)
@@ -237,31 +236,6 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
             if let error = error {
                 self.logger.error("WebSocket send error: \(error.localizedDescription)")
             }
-        }
-    }
-
-    private func analyzeLevels(_ buffer: AVAudioPCMBuffer) {
-        guard let channelData = buffer.floatChannelData?[0] else { return }
-        let frameCount = vDSP_Length(buffer.frameLength)
-
-        var rms: Float = 0
-        vDSP_rmsqv(channelData, 1, &rms, frameCount)
-
-        var crossings: Float = 0
-        if frameCount > 1 {
-            for i in 0..<Int(frameCount - 1) {
-                 if (channelData[i] > 0 && channelData[i + 1] <= 0) ||
-                    (channelData[i] < 0 && channelData[i + 1] >= 0) {
-                     crossings += 1
-                 }
-            }
-        }
-
-        let zcr = crossings / Float(frameCount)
-        
-        Task { @MainActor in
-            self.currentRMS = rms
-            self.currentZCR = zcr
         }
     }
 
