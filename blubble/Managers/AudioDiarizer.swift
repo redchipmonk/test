@@ -4,7 +4,7 @@ import AVFoundation
 import CoreML
 import OSLog
 
-actor AudioDiarizer {
+actor AudioDiarizer: AudioDiarizing {
     private let logger = Logger(subsystem: "team1.blubble", category: "AudioDiarizer")
     private var diarizer: SortformerDiarizer?
     private var isModelLoaded: Bool = false
@@ -16,7 +16,11 @@ actor AudioDiarizer {
     }
     
     func loadModel() async throws {
-        guard !isModelLoaded else { return }
+        logger.info("loadModel() called. current isModelLoaded: \(self.isModelLoaded)")
+        guard !isModelLoaded else { 
+            logger.info("Model already loaded, skipping.")
+            return 
+        }
         
         do {
             logger.info("Initializing Sortformer config...")
@@ -47,6 +51,7 @@ actor AudioDiarizer {
     
     func process(buffer: AVAudioPCMBuffer) async throws -> SortformerChunkResult? {
         guard let diarizer = diarizer, isModelLoaded else {
+            logger.error("process() failed: diarizer is \(String(describing: self.diarizer)), isModelLoaded: \(self.isModelLoaded)")
             throw DiarizerError.modelNotLoaded
         }
         

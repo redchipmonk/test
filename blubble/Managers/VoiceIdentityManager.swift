@@ -5,23 +5,30 @@ import FluidAudio
 import OSLog
 
 @MainActor
-final class VoiceIdentityManager: ObservableObject {
+final class VoiceIdentityManager: VoiceIdentityManaging {
     private let logger = Logger(subsystem: "team1.blubble", category: "VoiceIdentityManager")
     
     @Published var speakerProbabilities: [Float] = [0, 0, 0, 0]
     @Published var currentSpeaker: String? = nil
+    @Published var isInitializing: Bool = false
     
-    private let diarizer = AudioDiarizer()
+    private let diarizer: any AudioDiarizing
     private let audioConverter = AudioConverter()
     
-    init() {}
+    init(diarizer: any AudioDiarizing) {
+        self.diarizer = diarizer
+    }
     
     func initialize() async {
+        logger.info("initialize() called on VoiceIdentityManager")
+        isInitializing = true
         do {
             try await diarizer.loadModel()
+            logger.info("diarizer.loadModel() successfully returned")
         } catch {
             logger.error("Failed to initialize diarizer: \(error.localizedDescription)")
         }
+        isInitializing = false
     }
     
     func processStreamBuffer(_ buffer: AVAudioPCMBuffer) async {

@@ -6,7 +6,7 @@ import Combine
 import OSLog
 
 @MainActor
-final class AudioInputManager: NSObject, ObservableObject {
+final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
     private let logger = Logger(subsystem: "team1.blubble", category: "AudioInputManager")
     
     @Published var currentRMS: Float = 0.0
@@ -25,7 +25,7 @@ final class AudioInputManager: NSObject, ObservableObject {
     
     @Published var chatHistory: [ChatMessage] = []
     
-    let identityManager: VoiceIdentityManager
+    let identityManager: any VoiceIdentityManaging
 
     private let apiKey: String
     private let audioEngine = AVAudioEngine()
@@ -35,7 +35,7 @@ final class AudioInputManager: NSObject, ObservableObject {
     
     private let analysisQueue = DispatchQueue(label: "com.blubble.audioAnalysis", qos: .userInteractive)
     
-    init(apiKey: String, identityManager: VoiceIdentityManager) {
+    init(apiKey: String, identityManager: any VoiceIdentityManaging) {
         self.apiKey = apiKey
         self.identityManager = identityManager
         super.init()
@@ -138,6 +138,7 @@ final class AudioInputManager: NSObject, ObservableObject {
             
             if let alternative = response.channel?.alternatives.first {
                 let newTranscript = alternative.transcript
+                logger.debug("Deepgram received: '\(newTranscript)' (is_final: \(isFinal))")
                 
                 Task { @MainActor in
                     let speakerID = self.currentSpeaker ?? 0
@@ -277,7 +278,7 @@ final class AudioInputManager: NSObject, ObservableObject {
 
 extension AudioInputManager: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        logger.info("WebSocket Connected")
+        logger.info("WebSocket Connected to Deepgram")
     }
     
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {

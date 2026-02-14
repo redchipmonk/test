@@ -1,10 +1,11 @@
 import SwiftUI
 import RealityKit
 import RealityKitContent
+import OSLog
 
 struct ContentView: View {
-    @StateObject private var identityManager = VoiceIdentityManager()
-    @StateObject private var audioManager: AudioInputManager
+    @ObservedObject var audioManager: AudioInputManager
+    @ObservedObject var identityManager: VoiceIdentityManager
     @Environment(ConversationStore.self) private var conversationStore
     
     @State private var selectedTab: Tab = .transcribe
@@ -14,45 +15,35 @@ struct ContentView: View {
         case transcribe
         case history
     }
-    
-    init() {
-        let identity = VoiceIdentityManager()
-        _identityManager = StateObject(wrappedValue: identity)
-        
-        // Load API key from Secrets.plist
-        var apiKey = ""
-        if let path = Bundle.main.path(forResource: "Secrets", ofType: "plist"),
-           let dict = NSDictionary(contentsOfFile: path) as? [String: Any],
-           let key = dict["DeepgramAPIKey"] as? String {
-            apiKey = key
-        } else {
-            // Log error or handle missing API key
-            Logger(subsystem: "team1.blubble", category: "ContentView").error("Failed to load DeepgramAPIKey from Secrets.plist")
-        }
-        
-        _audioManager = StateObject(wrappedValue: AudioInputManager(apiKey: apiKey, identityManager: identity))
-    }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // MARK: - Transcribe Tab
-            transcribeView
-                .tabItem {
-                    Label("Transcribe", systemImage: "mic.fill")
-                }
-                .tag(Tab.transcribe)
+        ZStack {
+            TabView(selection: $selectedTab) {
+                // MARK: - Transcribe Tab
+                transcribeView
+                    .tabItem {
+                        Label("Transcribe", systemImage: "mic.fill")
+                    }
+                    .tag(Tab.transcribe)
+                
+                // MARK: - History Tab
+                SavedConversationsView()
+                    .tabItem {
+                        Label("History", systemImage: "clock.arrow.circlepath")
+                    }
+                    .tag(Tab.history)
+            }
+            .background(.clear)
             
-            // MARK: - History Tab
-            SavedConversationsView()
-                .tabItem {
-                    Label("History", systemImage: "clock.arrow.circlepath")
-                }
-                .tag(Tab.history)
+            if identityManager.isInitializing {
+                LoadingView()
+            }
         }
-        .background(.clear)
         .task {
+            Logger(subsystem: "team1.blubble", category: "ContentView").info("ContentView .task started")
             // Start loading models immediately
             await identityManager.initialize()
+            Logger(subsystem: "team1.blubble", category: "ContentView").info("ContentView .task finished")
         }
     }
     
