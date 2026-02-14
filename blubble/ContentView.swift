@@ -99,14 +99,14 @@ struct ContentView: View {
                     }
                     .padding()
                 }
-                .onChange(of: viewModel.chatHistory) { _ in
-                    if let lastId = viewModel.chatHistory.last?.id {
+                .onChange(of: viewModel.chatHistory) { oldValue, newValue in
+                    if let lastId = newValue.last?.id {
                         withAnimation {
                             proxy.scrollTo(lastId, anchor: .bottom)
                         }
                     }
                 }
-                .onChange(of: viewModel.transcript) { _ in
+                .onChange(of: viewModel.transcript) {
                     withAnimation {
                         proxy.scrollTo("pending", anchor: .bottom)
                     }
