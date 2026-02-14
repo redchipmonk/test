@@ -1,10 +1,3 @@
-//
-//  Conversation.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 2/3/26.
-//
-
 import Foundation
 
 /// Represents a saved conversation session
@@ -52,13 +45,29 @@ struct SavedMessage: Identifiable, Codable {
 /// Manages saved conversations with persistence
 @MainActor
 @Observable
-class ConversationStore {
+class ConversationStore: ConversationStorageProtocol {
     var savedConversations: [Conversation] = []
     
-    private let saveKey = "savedConversations"
+    private var saveURL: URL {
+        URL.documentsDirectory.appendingPathComponent("conversations.json")
+    }
     
     init() {
+        migrateFromUserDefaults()
         loadConversations()
+    }
+    
+    private func migrateFromUserDefaults() {
+        let saveKey = "savedConversations"
+        if let data = UserDefaults.standard.data(forKey: saveKey) {
+            do {
+                try data.write(to: saveURL, options: [.atomic, .completeFileProtection])
+                UserDefaults.standard.removeObject(forKey: saveKey)
+                print("Successfully migrated conversations from UserDefaults to file storage")
+            } catch {
+                print("Failed to migrate conversations: \(error.localizedDescription)")
+            }
+        }
     }
     
     func save(_ messages: [ChatMessage]) {
@@ -81,15 +90,23 @@ class ConversationStore {
     }
     
     private func persistConversations() {
-        if let data = try? JSONEncoder().encode(savedConversations) {
-            UserDefaults.standard.set(data, forKey: saveKey)
+        do {
+            let data = try JSONEncoder().encode(savedConversations)
+            try data.write(to: saveURL, options: [.atomic, .completeFileProtection])
+        } catch {
+            print("Failed to save conversations: \(error.localizedDescription)")
         }
     }
     
     private func loadConversations() {
-        if let data = UserDefaults.standard.data(forKey: saveKey),
-           let conversations = try? JSONDecoder().decode([Conversation].self, from: data) {
+        guard FileManager.default.fileExists(atPath: saveURL.path) else { return }
+        
+        do {
+            let data = try Data(contentsOf: saveURL)
+            let conversations = try JSONDecoder().decode([Conversation].self, from: data)
             savedConversations = conversations
+        } catch {
+            print("Failed to load conversations: \(error.localizedDescription)")
         }
     }
 }

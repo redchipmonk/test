@@ -1,18 +1,14 @@
-//
-//  AudioDiarizer.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 2/9/26.
-//
-
 import Foundation
 import FluidAudio
 import AVFoundation
 import CoreML
+import OSLog
 
-actor AudioDiarizer {
+actor AudioDiarizer: AudioDiarizing {
+    private let logger = Logger(subsystem: "team1.blubble", category: "AudioDiarizer")
     private var diarizer: SortformerDiarizer?
     private var isModelLoaded: Bool = false
+    private let audioConverter = AudioConverter()
     
     enum DiarizerError: Error {
         case modelNotLoaded
@@ -21,21 +17,20 @@ actor AudioDiarizer {
     }
     
     func loadModel() async throws {
-        // Prevent double loading
-        guard !isModelLoaded else { return }
+        logger.info("loadModel() called. current isModelLoaded: \(self.isModelLoaded)")
+        guard !isModelLoaded else { 
+            logger.info("Model already loaded, skipping.")
+            return 
+        }
         
         do {
-            print("⏳ AudioDiarizer: Initializing Sortformer config...")
-            // Create default config
+            logger.info("Initializing Sortformer config...")
             let config = SortformerConfig.default
             
-            print("⏳ AudioDiarizer: Creating diarizer instance...")
-            // Create diarizer with config first (matches documentation pattern)
+            logger.info("Creating diarizer instance...")
             let newDiarizer = SortformerDiarizer(config: config)
             
-            print("⏳ AudioDiarizer: Downloading/Loading Sortformer models...")
-            // Load models from HuggingFace (or cache)
-            // Use CPU-only on Simulator to avoid Metal/MPSGraph errors
+            logger.info("Downloading/Loading Sortformer models...")
             #if targetEnvironment(simulator)
             let computeUnits: MLComputeUnits = .cpuOnly
             #else
@@ -44,75 +39,56 @@ actor AudioDiarizer {
             
             let models = try await SortformerModels.loadFromHuggingFace(config: config, computeUnits: computeUnits)
             
-            print("⏳ AudioDiarizer: Initializing pipeline...")
             newDiarizer.initialize(models: models)
             
             self.diarizer = newDiarizer
             self.isModelLoaded = true
-            print("✅ AudioDiarizer: Ready (Sortformer)")
+            logger.info("Ready (Sortformer)")
         } catch {
-            print("❌ AudioDiarizer: Failed to load models - \(error)")
+            logger.error("Failed to load models: \(error.localizedDescription)")
             throw DiarizerError.modelLoadingFailed
         }
     }
     
-    /// Process a checking of audio and return the result for that chunk (if available)
-    func process(buffer: AVAudioPCMBuffer) async throws -> SortformerChunkResult? {
+    func process(nativeBuffer buffer: AVAudioPCMBuffer) async throws -> SortformerChunkResult? {
         guard let diarizer = diarizer, isModelLoaded else {
+            logger.error("process() failed: diarizer is \(String(describing: self.diarizer)), isModelLoaded: \(self.isModelLoaded)")
             throw DiarizerError.modelNotLoaded
         }
         
-        // Convert AVAudioPCMBuffer to [Float] for FluidAudio
-        guard let channelData = buffer.floatChannelData?[0] else {
-            throw DiarizerError.processingFailed
+        // 1. Resample to 16kHz
+        let convertedSamples = try audioConverter.resampleBuffer(buffer)
+        
+        // 2. Prepare 16kHz buffer for diarizer
+        let targetFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16000,
+            channels: 1,
+            interleaved: false
+        )!
+        
+        guard let convertedBuffer = AVAudioPCMBuffer(
+            pcmFormat: targetFormat,
+            frameCapacity: AVAudioFrameCount(convertedSamples.count)
+        ) else {
+            logger.warning("Failed to create 16kHz buffer")
+            return nil
         }
         
-        let frameCount = Int(buffer.frameLength)
-        let samples = Array(UnsafeBufferPointer(start: channelData, count: frameCount))
+        convertedBuffer.frameLength = AVAudioFrameCount(convertedSamples.count)
+        if let floatData = convertedBuffer.floatChannelData?[0] {
+            convertedSamples.withUnsafeBufferPointer { ptr in
+                floatData.update(from: ptr.baseAddress!, count: convertedSamples.count)
+            }
+        }
         
-        // Process samples using Sortformer's streaming API
-        let result = try diarizer.processSamples(samples)
+        // 3. Process with Sortformer
+        let result = try diarizer.processSamples(Array(convertedSamples))
         
-        // Debug logging for Sortformer output
         if let result = result {
-            print("🔍 [Sortformer] Chunk Result:")
-            print("   Frame Count: \(result.frameCount)")
-            print("   Speaker Predictions Count: \(result.speakerPredictions.count)")
-            
-            // Show first few predictions as a sample
-            let sampleSize = min(8, result.speakerPredictions.count)
-            if sampleSize > 0 {
-                let sample = result.speakerPredictions.prefix(sampleSize)
-                print("   First \(sampleSize) predictions: \(sample.map { String(format: "%.3f", $0) })")
-            }
-            
-            // Show predictions for the last frame (most recent)
-            let numSpeakers = 4
-            if result.frameCount > 0 {
-                let lastFrameIndex = result.frameCount - 1
-                let startIdx = lastFrameIndex * numSpeakers
-                let endIdx = startIdx + numSpeakers
-                
-                if endIdx <= result.speakerPredictions.count {
-                    let lastFrameProbs = result.speakerPredictions[startIdx..<endIdx]
-                    print("   Latest frame [Sp1, Sp2, Sp3, Sp4]: [\(lastFrameProbs.map { String(format: "%.3f", $0) }.joined(separator: ", "))]")
-                    
-                    // Identify active speakers (prob > 0.5)
-                    let activeSpeakers = lastFrameProbs.enumerated().filter { $0.element > 0.5 }.map { "Speaker \($0.offset + 1) (\(String(format: "%.3f", $0.element)))" }
-                    if !activeSpeakers.isEmpty {
-                        print("   Active speakers: \(activeSpeakers.joined(separator: ", "))")
-                    } else {
-                        print("   Active speakers: None (all below 0.5ß threshold)")
-                    }
-                }
-            }
-        } else {
-            print("🔍 [Sortformer] No result returned for this chunk")
+            logger.debug("[Sortformer] Chunk Result: Frame Count: \(result.frameCount)")
         }
         
         return result
     }
-    
-    // Note: Sortformer does NOT support SpeakerManager or Embedding Extraction compatible with the previous flow.
-    // We remove getSpeakerManager() and extractEmbedding().
 }

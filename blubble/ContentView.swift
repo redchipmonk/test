@@ -1,53 +1,38 @@
-//
-//  ContentView.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 1/28/26.
-//
-
 import SwiftUI
 import RealityKit
 import RealityKitContent
+import OSLog
 
 struct ContentView: View {
-    @StateObject private var identityManager = VoiceIdentityManager()
-    @StateObject private var audioManager: AudioInputManager
-    @Environment(ConversationStore.self) private var conversationStore
+    @Bindable var viewModel: ContentViewModel
     
-    @State private var selectedTab: Tab = .transcribe
-    @State private var showingSaveConfirmation = false
-
-    enum Tab {
-        case transcribe
-        case history
-    }
-    
-    init() {
-        let identity = VoiceIdentityManager()
-        _identityManager = StateObject(wrappedValue: identity)
-        _audioManager = StateObject(wrappedValue: AudioInputManager(apiKey: "9ef63010c60b46f5d8fa0a550b9f418509edb84e", identityManager: identity))
-    }
-
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // MARK: - Transcribe Tab
-            transcribeView
-                .tabItem {
-                    Label("Transcribe", systemImage: "mic.fill")
-                }
-                .tag(Tab.transcribe)
+        ZStack {
+            TabView(selection: $viewModel.selectedTab) {
+                // MARK: - Transcribe Tab
+                transcribeView
+                    .tabItem {
+                        Label("Transcribe", systemImage: "mic.fill")
+                    }
+                    .tag(Tab.transcribe)
+                
+                // MARK: - History Tab
+                SavedConversationsView(store: viewModel.getStore())
+                    .tabItem {
+                        Label("History", systemImage: "clock.arrow.circlepath")
+                    }
+                    .tag(Tab.history)
+            }
+            .background(.clear)
             
-            // MARK: - History Tab
-            SavedConversationsView()
-                .tabItem {
-                    Label("History", systemImage: "clock.arrow.circlepath")
-                }
-                .tag(Tab.history)
+            if viewModel.isInitializing {
+                LoadingView()
+            }
         }
-        .background(.clear)
         .task {
-            // Start loading models immediately
-            await identityManager.initialize()
+            Logger(subsystem: "team1.blubble", category: "ContentView").info("ContentView .task started")
+            await viewModel.initialize()
+            Logger(subsystem: "team1.blubble", category: "ContentView").info("ContentView .task finished")
         }
     }
     
@@ -60,20 +45,20 @@ struct ContentView: View {
                 // Status indicator
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(audioManager.isRunning ? Color.green : Color.gray)
+                        .fill(viewModel.isRunning ? Color.green : Color.gray)
                         .frame(width: 10, height: 10)
-                    Text(audioManager.isRunning ? "Transcribing..." : "Ready")
+                    Text(viewModel.isRunning ? "Transcribing..." : "Ready")
                         .font(.headline)
-                        .foregroundStyle(audioManager.isRunning ? .primary : .secondary)
+                        .foregroundStyle(viewModel.isRunning ? .primary : .secondary)
                 }
                 
                 Spacer()
                 
                 // Action buttons (shown when not recording and has messages)
-                if !audioManager.isRunning && !audioManager.chatHistory.isEmpty {
+                if !viewModel.isRunning && !viewModel.chatHistory.isEmpty {
                     HStack(spacing: 12) {
                         Button {
-                            saveConversation()
+                            viewModel.saveConversation()
                         } label: {
                             Label("Save", systemImage: "square.and.arrow.down")
                                 .font(.subheadline)
@@ -81,7 +66,7 @@ struct ContentView: View {
                         .buttonStyle(.bordered)
                         
                         Button(role: .destructive) {
-                            clearConversation()
+                            viewModel.clearConversation()
                         } label: {
                             Label("Clear", systemImage: "trash")
                                 .font(.subheadline)
@@ -97,16 +82,16 @@ struct ContentView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        ForEach(audioManager.chatHistory) { message in
+                        ForEach(viewModel.chatHistory) { message in
                             ChatBubble(text: message.text, speaker: message.speaker, isPending: false)
                                 .id(message.id)
                         }
                         
                         // Pending message
-                        if !audioManager.transcript.isEmpty {
+                        if !viewModel.transcript.isEmpty {
                             ChatBubble(
-                                text: audioManager.transcript,
-                                speaker: audioManager.currentSpeaker ?? 0,
+                                text: viewModel.transcript,
+                                speaker: Int(viewModel.currentSpeaker?.components(separatedBy: " ").last ?? "") ?? 0,
                                 isPending: true
                             )
                             .id("pending")
@@ -114,14 +99,14 @@ struct ContentView: View {
                     }
                     .padding()
                 }
-                .onChange(of: audioManager.chatHistory) { _ in
-                    if let lastId = audioManager.chatHistory.last?.id {
+                .onChange(of: viewModel.chatHistory) { oldValue, newValue in
+                    if let lastId = newValue.last?.id {
                         withAnimation {
                             proxy.scrollTo(lastId, anchor: .bottom)
                         }
                     }
                 }
-                .onChange(of: audioManager.transcript) { _ in
+                .onChange(of: viewModel.transcript) {
                     withAnimation {
                         proxy.scrollTo("pending", anchor: .bottom)
                     }
@@ -131,16 +116,16 @@ struct ContentView: View {
             Spacer()
             
             // Active Speaker Indicator (Sortformer)
-            if audioManager.isRunning {
+            if viewModel.isRunning {
                 VStack {
-                    Text("Active: \(identityManager.currentSpeaker ?? "None")")
+                    Text("Active: \(viewModel.currentSpeaker ?? "None")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
                     // Simple viz of 4 slots
                     HStack(spacing: 4) {
                         ForEach(0..<4) { index in
-                            let prob = identityManager.speakerProbabilities.indices.contains(index) ? identityManager.speakerProbabilities[index] : 0
+                            let prob = viewModel.speakerProbabilities.indices.contains(index) ? viewModel.speakerProbabilities[index] : 0
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(prob > 0.5 ? Color.green : Color.gray.opacity(0.3))
                                 .frame(width: 20, height: CGFloat(max(4, prob * 20)))
@@ -152,45 +137,33 @@ struct ContentView: View {
             
             // Large Start/Stop Button
             Button(action: {
-                if audioManager.isRunning {
-                    audioManager.stopMonitoring()
+                if viewModel.isRunning {
+                    viewModel.stopMonitoring()
                 } else {
-                    audioManager.startMonitoring()
+                    viewModel.startMonitoring()
                 }
             }) {
                 HStack(spacing: 12) {
-                    Image(systemName: audioManager.isRunning ? "stop.fill" : "mic.fill")
+                    Image(systemName: viewModel.isRunning ? "stop.fill" : "mic.fill")
                         .font(.title2)
-                    Text(audioManager.isRunning ? "Stop Transcribing" : "Start Transcribing")
+                    Text(viewModel.isRunning ? "Stop Transcribing" : "Start Transcribing")
                         .font(.title3)
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(audioManager.isRunning ? Color.red : Color.blue)
+                .background(viewModel.isRunning ? Color.red : Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(16)
             }
             .padding()
         }
         .background(.clear)
-        .alert("Conversation Saved", isPresented: $showingSaveConfirmation) {
+        .alert("Conversation Saved", isPresented: $viewModel.showingSaveConfirmation) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Your conversation has been saved to History.")
         }
-    }
-    
-    // MARK: - Actions
-    
-    private func saveConversation() {
-        conversationStore.save(audioManager.chatHistory)
-        showingSaveConfirmation = true
-    }
-    
-    private func clearConversation() {
-        audioManager.chatHistory.removeAll()
-        audioManager.transcript = ""
     }
 }
 

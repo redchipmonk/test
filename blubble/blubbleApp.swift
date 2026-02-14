@@ -1,33 +1,53 @@
-//
-//  blubbleApp.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 1/28/26.
-//
-
 import SwiftUI
 
 @main
 struct blubbleApp: App {
+    @State private var viewModel: ContentViewModel
+    @State private var audioSystem: AudioSystem
 
-    @State private var appModel = AppModel()
-    @State private var voiceSpatialManager = VoiceSpatialManager()
-    @State private var conversationStore = ConversationStore()
+    init() {
+        // 1. Data Layer
+        let conversationStore = ConversationStore()
+        
+        // 2. Service Layer
+        let audioCaptureService = AudioCaptureService()
+        let audioConverterService = AudioConverterService()
+        
+        var apiKey = ""
+        if let path = Bundle.main.path(forResource: "Secrets", ofType: "plist"),
+           let dict = NSDictionary(contentsOfFile: path) as? [String: Any],
+           let key = dict["DeepgramAPIKey"] as? String {
+            apiKey = key
+        }
+        let speechRecognitionService = SpeechRecognitionService(apiKey: apiKey, converterService: audioConverterService)
+        
+        let diarizer = AudioDiarizer()
+        let identityManager = VoiceIdentityManager(diarizer: diarizer)
+        
+        // 3. Coordination Layer
+        let system = AudioSystem(
+            audioCaptureService: audioCaptureService,
+            speechRecognitionService: speechRecognitionService,
+            identityManager: identityManager,
+            audioConverterService: audioConverterService
+        )
+        _audioSystem = State(wrappedValue: system)
+        
+        // 4. View Model Layer
+        let vm = ContentViewModel(
+            audioCaptureService: audioCaptureService,
+            speechRecognitionService: speechRecognitionService,
+            identityManager: identityManager,
+            conversationStore: conversationStore
+        )
+        _viewModel = State(wrappedValue: vm)
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(appModel)
-                .environment(voiceSpatialManager)
-                .environment(conversationStore)
+            ContentView(viewModel: viewModel)
         }
         .windowStyle(.plain)
         .defaultSize(width: 500, height: 600)
-        
-        ImmersiveSpace(id: "PartnerTracking") {
-            PartnerTrackingView()
-                .environment(voiceSpatialManager)
-        }
-        .immersionStyle(selection: .constant(.mixed), in: .mixed)
     }
 }

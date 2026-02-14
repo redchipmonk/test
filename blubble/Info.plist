@@ -2,28 +2,24 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>blubble uses the microphone to distinguish between your voice and your partner's voice for real-time transcription.</string>
-	<key>NSWorldSensingUsageDescription</key>
-	<string>blubble uses world sensing to place speech bubbles at your partner's location in your space.</string>
-	<key>NSHandsTrackingUsageDescription</key>
-	<string>blubble uses hand tracking to allow you to tap and place your partner's location.</string>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationPreferredDefaultSceneSessionRole</key>
-		<string>UIWindowSceneSessionRoleApplication</string>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<true/>
-		<key>UISceneConfigurations</key>
-		<dict>
-			<key>UISceneSessionRoleImmersiveSpaceApplication</key>
-			<array>
-				<dict>
-					<key>UISceneInitialImmersionStyle</key>
-					<string>UIImmersionStyleFull</string>
-				</dict>
-			</array>
-		</dict>
-	</dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>blubble needs microphone access to distinguish between your voice and your partner's voice for real-time transcription.</string>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationPreferredDefaultSceneSessionRole</key>
+        <string>UIWindowSceneSessionRoleApplication</string>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <true/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UISceneSessionRoleImmersiveSpaceApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneInitialImmersionStyle</key>
+                    <string>UIImmersionStyleFull</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
 </dict>
 </plist>

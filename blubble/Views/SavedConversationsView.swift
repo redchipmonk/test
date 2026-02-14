@@ -1,15 +1,8 @@
-//
-//  SavedConversationsView.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 2/3/26.
-//
-
 import SwiftUI
 
 /// View displaying saved conversation history
 struct SavedConversationsView: View {
-    @Environment(ConversationStore.self) private var store
+    let store: any ConversationStorageProtocol
     @State private var selectedConversation: Conversation?
     
     var body: some View {
@@ -135,6 +128,5 @@ struct SavedChatBubble: View {
 }
 
 #Preview {
-    SavedConversationsView()
-        .environment(ConversationStore())
+    SavedConversationsView(store: ConversationStore())
 }
