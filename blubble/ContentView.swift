@@ -18,7 +18,19 @@ struct ContentView: View {
     init() {
         let identity = VoiceIdentityManager()
         _identityManager = StateObject(wrappedValue: identity)
-        _audioManager = StateObject(wrappedValue: AudioInputManager(apiKey: "9ef63010c60b46f5d8fa0a550b9f418509edb84e", identityManager: identity))
+        
+        // Load API key from Secrets.plist
+        var apiKey = ""
+        if let path = Bundle.main.path(forResource: "Secrets", ofType: "plist"),
+           let dict = NSDictionary(contentsOfFile: path) as? [String: Any],
+           let key = dict["DeepgramAPIKey"] as? String {
+            apiKey = key
+        } else {
+            // Log error or handle missing API key
+            Logger(subsystem: "team1.blubble", category: "ContentView").error("Failed to load DeepgramAPIKey from Secrets.plist")
+        }
+        
+        _audioManager = StateObject(wrappedValue: AudioInputManager(apiKey: apiKey, identityManager: identity))
     }
 
     var body: some View {
