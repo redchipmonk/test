@@ -1,10 +1,3 @@
-//
-//  SavedConversationsView.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 2/3/26.
-//
-
 import SwiftUI
 
 /// View displaying saved conversation history

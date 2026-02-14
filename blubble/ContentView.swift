@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 1/28/26.
-//
-
 import SwiftUI
 import RealityKit
 import RealityKitContent

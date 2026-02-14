@@ -1,28 +1,21 @@
-//
-//  AudioInputManager.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 1/28/26.
-//
-
 import Foundation
 import AVFoundation
 import Accelerate
 import Speech
 import Combine
+import OSLog
 
 @MainActor
 final class AudioInputManager: NSObject, ObservableObject {
+    private let logger = Logger(subsystem: "team1.blubble", category: "AudioInputManager")
+    
     @Published var currentRMS: Float = 0.0
     @Published var currentZCR: Float = 0.0
     @Published var isRunning: Bool = false
     
     @Published var transcript: String = ""
-    // currentSpeaker is now derived from VoiceIdentityManager
     var currentSpeaker: Int? {
-        // Map "Speaker N" string to Int
         if let speakerString = identityManager.currentSpeaker {
-            // "Speaker 1" -> 0, "Speaker 2" -> 1
             if let id = Int(speakerString.components(separatedBy: " ").last ?? "") {
                 return id - 1
             }
@@ -32,11 +25,10 @@ final class AudioInputManager: NSObject, ObservableObject {
     
     @Published var chatHistory: [ChatMessage] = []
     
-    // Inject VoiceIdentityManager
     let identityManager: VoiceIdentityManager
 
     private let apiKey: String
-    private let audioEngine = AVAudioEngine() // Main engine likely moved to IdentityManager in future refactor, but kept here for now
+    private let audioEngine = AVAudioEngine()
     
     private let inputBus: AVAudioNodeBus = 0
     private var webSocketTask: URLSessionWebSocketTask?
@@ -60,18 +52,13 @@ final class AudioInputManager: NSObject, ObservableObject {
             setupAudioEngine()
             try audioEngine.start()
             isRunning = true
-            
-            // Notify IdentityManager we are starting (so it can reset state if needed)
-            // identityManager.startMonitoring() // Removed as it's no-op now
-            
         } catch {
-            print("Failed to start audio engine:", error)
+            logger.error("Failed to start audio engine: \(error.localizedDescription)")
             stopMonitoring()
         }
     }
 
     func stopMonitoring() {
-        // Stop Audio
         if audioEngine.isRunning {
             audioEngine.inputNode.removeTap(onBus: inputBus)
             audioEngine.stop()
@@ -79,21 +66,15 @@ final class AudioInputManager: NSObject, ObservableObject {
         
         isRunning = false
         
-        // Notify IdentityManager
-        // identityManager.stopMonitoring() // Removed
-        
-        // Close WebSocket
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
     }
     
     private func setupWebSocket() {
-        // Deepgram WebSocket URL
         var components = URLComponents(string: "wss://api.deepgram.com/v1/listen")
         components?.queryItems = [
             URLQueryItem(name: "model", value: "nova-2"),
             URLQueryItem(name: "smart_format", value: "true"),
-            // Diarize FALSE - we do it locally now!
             URLQueryItem(name: "diarize", value: "false"),
             URLQueryItem(name: "encoding", value: "linear16"),
             URLQueryItem(name: "sample_rate", value: "48000")
@@ -108,14 +89,14 @@ final class AudioInputManager: NSObject, ObservableObject {
         webSocketTask = session.webSocketTask(with: request)
         webSocketTask?.resume()
         
-        ping() // Keep connection alive
+        ping()
         receiveMessage()
     }
     
     private func ping() {
         webSocketTask?.sendPing { error in
             if let error = error {
-                print("WebSocket Ping Error: \(error)")
+                self.logger.error("WebSocket Ping Error: \(error.localizedDescription)")
             } else if self.isRunning {
                 DispatchQueue.global().asyncAfter(deadline: .now() + 5) { [weak self] in
                     self?.ping()
@@ -130,7 +111,7 @@ final class AudioInputManager: NSObject, ObservableObject {
             
             switch result {
             case .failure(let error):
-                print("WebSocket receive error:", error)
+                self.logger.error("WebSocket receive error: \(error.localizedDescription)")
             case .success(let message):
                 switch message {
                 case .string(let text):
@@ -159,8 +140,7 @@ final class AudioInputManager: NSObject, ObservableObject {
                 let newTranscript = alternative.transcript
                 
                 Task { @MainActor in
-                    // Speaker ID comes from local IdentityManager now
-                    let speakerID = self.currentSpeaker ?? 0 // Default to user if unsure
+                    let speakerID = self.currentSpeaker ?? 0
                     
                     if isFinal {
                         if !newTranscript.isEmpty {
@@ -178,21 +158,19 @@ final class AudioInputManager: NSObject, ObservableObject {
                 }
             }
         } catch {
-            print("JSON decoding error:", error)
+            logger.error("JSON decoding error: \(error.localizedDescription)")
         }
     }
-
-    // MARK: - Audio Handling
+    
     private func setupAudioEngine() {
         let inputNode = audioEngine.inputNode
         let nativeFormat = inputNode.inputFormat(forBus: inputBus)
         
         guard nativeFormat.channelCount > 0 else {
-            print("❌ AudioInputManager: Input node format has 0 channels. Aborting setup.")
+            logger.error("AudioInputManager: Input node format has 0 channels. Aborting setup.")
             return
         }
         
-        // Target: 48kHz Int16 (Deepgram standard high quality)
         let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatInt16,
             sampleRate: 48000,
@@ -201,39 +179,20 @@ final class AudioInputManager: NSObject, ObservableObject {
         )!
         
         guard let formatConverter = AVAudioConverter(from: nativeFormat, to: targetFormat) else {
-            print("❌ AudioInputManager: Failed to create audio converter.")
+            logger.error("AudioInputManager: Failed to create audio converter.")
             return
         }
-        
-        // We also need to feed VoiceIdentityManager which requires standard buffers.
-        // We can pass the native buffer directly.
         
         inputNode.removeTap(onBus: inputBus)
         inputNode.installTap(onBus: inputBus, bufferSize: 4096, format: nativeFormat) { [weak self] buffer, time in
             guard let self = self else { return }
             
-            // 1. Analyze for UI viz
             self.analyzeLevels(buffer)
             
-            // 2. Stream to VoiceIdentityManager for Diarization
-            // Note: This is async actor call inside
             Task {
-                // We create a copy or pass buffer (AVAudioPCMBuffer is ref type, but immutable data usually ok here if we don't modify)
-                // However, deepgram converter might modify? No, it reads.
-                // We pass the buffer to IdentityManager's processing loop (which expects 16kHz conversion inside)
-                // Actually IdentityManager (as written in previous step) has its own audio engine for calibration.
-                // But for real-time monitoring, we are sharing THIS capture session.
-                // So IdentityManager needs a `processExternalBuffer` method if we don't want two engines fighting.
-                // Let's assume we use `processAudioBuffer` from IdentityManager which we made private...
-                // We should expose it.
-                // But wait, IdentityManager was written to start its OWN engine in startMonitoring.
-                // CONFLICT DETECTED.
-                // Fix: We should consolidate.
-                // For this step implementation, let's assume we pass the buffer to a new public method `processStreamBuffer` on IdentityManager.
                 await self.identityManager.processStreamBuffer(buffer)
             }
             
-            // 3. Stream to Deepgram
             self.convertAndStream(buffer: buffer, converter: formatConverter, targetFormat: targetFormat)
         }
     }
@@ -256,7 +215,7 @@ final class AudioInputManager: NSObject, ObservableObject {
         converter.convert(to: outputBuffer, error: &error, withInputFrom: inputBlock)
         
         if let error = error {
-            print("Audio conversion error: \(error)")
+            logger.error("Audio conversion error: \(error.localizedDescription)")
             return
         }
         
@@ -275,7 +234,7 @@ final class AudioInputManager: NSObject, ObservableObject {
         let message = URLSessionWebSocketTask.Message.data(data)
         webSocketTask?.send(message) { error in
             if let error = error {
-                print("WebSocket send error:", error)
+                self.logger.error("WebSocket send error: \(error.localizedDescription)")
             }
         }
     }
@@ -318,11 +277,11 @@ final class AudioInputManager: NSObject, ObservableObject {
 
 extension AudioInputManager: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        print("✅ WebSocket Connected")
+        logger.info("WebSocket Connected")
     }
     
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
         let reasonString = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "No reason"
-        print("❌ WebSocket Closed: Code \(closeCode.rawValue), Reason: \(reasonString)")
+        logger.error("WebSocket Closed: Code \(closeCode.rawValue), Reason: \(reasonString)")
     }
 }

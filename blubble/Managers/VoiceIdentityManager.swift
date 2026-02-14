@@ -1,28 +1,18 @@
-//
-//  VoiceIdentityManager.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 2/9/26.
-//
-
 import Foundation
 import Combine
 import AVFoundation
 import FluidAudio
+import OSLog
 
 @MainActor
 final class VoiceIdentityManager: ObservableObject {
+    private let logger = Logger(subsystem: "team1.blubble", category: "VoiceIdentityManager")
     
-    // Simplified state for Sortformer
-    // Sortformer outputs 4 fixed slots. 
     @Published var speakerProbabilities: [Float] = [0, 0, 0, 0]
     @Published var currentSpeaker: String? = nil
     
     private let diarizer = AudioDiarizer()
     private let audioConverter = AudioConverter()
-    
-    // We no longer manage the audio engine in here for calibration.
-    // We only process buffers from AudioInputManager.
     
     init() {}
     
@@ -30,21 +20,18 @@ final class VoiceIdentityManager: ObservableObject {
         do {
             try await diarizer.loadModel()
         } catch {
-            print("Failed to initialize diarizer: \(error)")
+            logger.error("Failed to initialize diarizer: \(error.localizedDescription)")
         }
     }
     
-    // Process buffer from external source (AudioInputManager)
     func processStreamBuffer(_ buffer: AVAudioPCMBuffer) async {
         do {
-            print("📥 [VoiceIdentityManager] Input buffer: \(buffer.format.sampleRate) Hz, \(buffer.format.channelCount) channel(s)")
+            logger.debug("Input buffer: \(buffer.format.sampleRate) Hz, \(buffer.format.channelCount) channel(s)")
             
-            // Convert to 16 kHz mono Float32 as required by Sortformer
             let convertedSamples = try audioConverter.resampleBuffer(buffer)
             
-            print("✅ [VoiceIdentityManager] Converted to 16 kHz: \(convertedSamples.count) samples")
+            logger.debug("Converted to 16 kHz: \(convertedSamples.count) samples")
             
-            // Create a 16kHz buffer from the converted samples
             let targetFormat = AVAudioFormat(
                 commonFormat: .pcmFormatFloat32,
                 sampleRate: 16000,
@@ -56,7 +43,7 @@ final class VoiceIdentityManager: ObservableObject {
                 pcmFormat: targetFormat,
                 frameCapacity: AVAudioFrameCount(convertedSamples.count)
             ) else {
-                print("⚠️ [VoiceIdentityManager] Failed to create 16kHz buffer")
+                logger.warning("Failed to create 16kHz buffer")
                 return
             }
             
@@ -67,26 +54,20 @@ final class VoiceIdentityManager: ObservableObject {
                 }
             }
             
-            // Get chunk result from Sortformer with properly formatted audio
             if let result = try await diarizer.process(buffer: convertedBuffer) {
-                // Update UI state
                 updateState(from: result)
             }
         } catch {
-            print("⚠️ [VoiceIdentityManager] Audio conversion or processing error: \(error)")
+            logger.error("Audio conversion or processing error: \(error.localizedDescription)")
         }
     }
     
     private func updateState(from result: SortformerChunkResult) {
-        // Result.speakerPredictions contains flattened [frameCount * 4] probabilities.
-        // We want to visualize the *latest* frame to show "who is speaking now".
-        
         let numSpeakers = 4
         let frameCount = result.frameCount
         
         guard frameCount > 0 else { return }
         
-        // Get the probabilities for the last frame in this chunk
         let lastFrameIndex = frameCount - 1
         let startIdx = lastFrameIndex * numSpeakers
         let endIdx = startIdx + numSpeakers
@@ -95,17 +76,15 @@ final class VoiceIdentityManager: ObservableObject {
             let lastFrameProbs = Array(result.speakerPredictions[startIdx..<endIdx])
             self.speakerProbabilities = lastFrameProbs
             
-            print("🎯 [VoiceIdentityManager] Processing Sortformer Result:")
-            print("   Speaker Probabilities: [\(lastFrameProbs.map { String(format: "%.3f", $0) }.joined(separator: ", "))]")
+            logger.debug("Processing Sortformer Result:")
+            logger.debug("   Speaker Probabilities: [\(lastFrameProbs.map { String(format: "%.3f", $0) }.joined(separator: ", "))]")
             
-            // Determine dominant speaker
-            // Threshold of 0.5 is standard for sigmoid output
             if let maxProb = lastFrameProbs.max(), let maxIndex = lastFrameProbs.firstIndex(of: maxProb), maxProb > 0.5 {
                 self.currentSpeaker = "Speaker \(maxIndex + 1)"
-                print("   Current Speaker: \(self.currentSpeaker ?? "None") (probability: \(String(format: "%.3f", maxProb)))")
+                logger.debug("   Current Speaker: \(self.currentSpeaker ?? "None") (probability: \(String(format: "%.3f", maxProb)))")
             } else {
                 self.currentSpeaker = nil
-                print("   Current Speaker: None (max probability \(String(format: "%.3f", lastFrameProbs.max() ?? 0)) below 0.5 threshold)")
+                logger.debug("   Current Speaker: None (max probability \(String(format: "%.3f", lastFrameProbs.max() ?? 0)) below 0.5 threshold)")
             }
         }
     }

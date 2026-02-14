@@ -1,10 +1,3 @@
-//
-//  Conversation.swift
-//  blubble
-//
-//  Created by Alvin Ngoc Le on 2/3/26.
-//
-
 import Foundation
 
 /// Represents a saved conversation session
