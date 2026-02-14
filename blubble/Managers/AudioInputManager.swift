@@ -116,7 +116,9 @@ final class AudioInputManager: NSObject, AudioInputManaging, ObservableObject {
             case .success(let message):
                 switch message {
                 case .string(let text):
-                    self.handleMessage(text)
+                    Task { @MainActor in
+                        self.handleMessage(text)
+                    }
                 case .data(_):
                     break
                 @unknown default:

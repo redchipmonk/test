@@ -10,6 +10,7 @@ protocol AudioDiarizing: Actor {
 }
 
 // MARK: - Voice Identity Manager Protocol
+@MainActor
 protocol VoiceIdentityManaging: ObservableObject {
     var speakerProbabilities: [Float] { get }
     var currentSpeaker: String? { get }
@@ -20,6 +21,7 @@ protocol VoiceIdentityManaging: ObservableObject {
 }
 
 // MARK: - Audio Input Manager Protocol
+@MainActor
 protocol AudioInputManaging: ObservableObject {
     var isRunning: Bool { get }
     var transcript: String { get }

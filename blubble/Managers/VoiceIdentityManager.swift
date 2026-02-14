@@ -33,7 +33,9 @@ final class VoiceIdentityManager: VoiceIdentityManaging {
     func processStreamBuffer(_ buffer: AVAudioPCMBuffer) async {
         do {
             if let result = try await diarizer.process(nativeBuffer: buffer) {
-                updateState(from: result)
+                await MainActor.run {
+                    updateState(from: result)
+                }
             }
         } catch {
             logger.error("Diarization processing error: \(error.localizedDescription)")
