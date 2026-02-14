@@ -171,14 +171,16 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "blubble needs microphone access to analyze your conversation and provide real-time memory aids.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "blubble uses hand tracking to allow you to tap and place your partner's location.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "blubble uses the microphone to distinguish between your voice and your partner's voice for real-time transcription.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "blubble uses speech recognition to transcribe your dialogue into the HUD.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "blubble uses world sensing to place speech bubbles at your partner's location in your space.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = edu.jeffsong2.team1.blubble;
+				PRODUCT_BUNDLE_IDENTIFIER = edu.lealv000.team1.blubble;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -202,14 +204,16 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "blubble needs microphone access to analyze your conversation and provide real-time memory aids.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "blubble uses hand tracking to allow you to tap and place your partner's location.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "blubble uses the microphone to distinguish between your voice and your partner's voice for real-time transcription.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "blubble uses speech recognition to transcribe your dialogue into the HUD.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "blubble uses world sensing to place speech bubbles at your partner's location in your space.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = edu.jeffsong2.team1.blubble;
+				PRODUCT_BUNDLE_IDENTIFIER = edu.lealv000.team1.blubble;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
