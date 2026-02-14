@@ -5,25 +5,22 @@ import OSLog
 
 @MainActor
 final class AudioSystem: ObservableObject {
-    let audioManager: AudioInputManager
-    let identityManager: VoiceIdentityManager
-    private let diarizer: AudioDiarizer
+    let audioCaptureService: any AudioCaptureProtocol
+    let speechRecognitionService: any SpeechRecognitionProtocol
+    let identityManager: any VoiceIdentityManaging
+    let audioConverterService: any AudioConverterProtocol
     
-    init() {
-        Logger(subsystem: "team1.blubble", category: "AudioSystem").info("AudioSystem.init() starting")
-        // Load API key from Secrets.plist
-        var apiKey = ""
-        if let path = Bundle.main.path(forResource: "Secrets", ofType: "plist"),
-           let dict = NSDictionary(contentsOfFile: path) as? [String: Any],
-           let key = dict["DeepgramAPIKey"] as? String {
-            apiKey = key
-        } else {
-            Logger(subsystem: "team1.blubble", category: "AudioSystem")
-                .error("Failed to load DeepgramAPIKey from Secrets.plist")
-        }
+    init(
+        audioCaptureService: any AudioCaptureProtocol,
+        speechRecognitionService: any SpeechRecognitionProtocol,
+        identityManager: any VoiceIdentityManaging,
+        audioConverterService: any AudioConverterProtocol
+    ) {
+        self.audioCaptureService = audioCaptureService
+        self.speechRecognitionService = speechRecognitionService
+        self.identityManager = identityManager
+        self.audioConverterService = audioConverterService
         
-        self.diarizer = AudioDiarizer()
-        self.identityManager = VoiceIdentityManager(diarizer: self.diarizer)
-        self.audioManager = AudioInputManager(apiKey: apiKey, identityManager: self.identityManager)
+        Logger(subsystem: "team1.blubble", category: "AudioSystem").info("AudioSystem.init() completed")
     }
 }

@@ -45,7 +45,7 @@ struct SavedMessage: Identifiable, Codable {
 /// Manages saved conversations with persistence
 @MainActor
 @Observable
-class ConversationStore {
+class ConversationStore: ConversationStorageProtocol {
     var savedConversations: [Conversation] = []
     
     private var saveURL: URL {
