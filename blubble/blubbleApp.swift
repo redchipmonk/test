@@ -2,8 +2,8 @@ import SwiftUI
 
 @main
 struct blubbleApp: App {
-    @StateObject private var viewModel: ContentViewModel
-    @StateObject private var audioSystem: AudioSystem
+    @State private var viewModel: ContentViewModel
+    @State private var audioSystem: AudioSystem
 
     init() {
         // 1. Data Layer
@@ -31,7 +31,7 @@ struct blubbleApp: App {
             identityManager: identityManager,
             audioConverterService: audioConverterService
         )
-        _audioSystem = StateObject(wrappedValue: system)
+        _audioSystem = State(wrappedValue: system)
         
         // 4. View Model Layer
         let vm = ContentViewModel(
@@ -40,7 +40,7 @@ struct blubbleApp: App {
             identityManager: identityManager,
             conversationStore: conversationStore
         )
-        _viewModel = StateObject(wrappedValue: vm)
+        _viewModel = State(wrappedValue: vm)
     }
 
     var body: some Scene {

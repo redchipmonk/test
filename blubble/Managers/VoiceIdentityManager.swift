@@ -5,12 +5,13 @@ import FluidAudio
 import OSLog
 
 @MainActor
+@Observable
 final class VoiceIdentityManager: VoiceIdentityManaging {
     private let logger = Logger(subsystem: "team1.blubble", category: "VoiceIdentityManager")
     
-    @Published var speakerProbabilities: [Float] = [0, 0, 0, 0]
-    @Published var currentSpeaker: String? = nil
-    @Published var isInitializing: Bool = false
+    var speakerProbabilities: [Float] = [0, 0, 0, 0]
+    var currentSpeaker: String? = nil
+    var isInitializing: Bool = false
     
     private let diarizer: any AudioDiarizing
     

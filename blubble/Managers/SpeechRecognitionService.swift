@@ -31,7 +31,9 @@ final class SpeechRecognitionService: NSObject, SpeechRecognitionProtocol {
             setupWebSocket()
             
             continuation.onTermination = { @Sendable _ in
-                self.stopRecognition()
+                Task { [weak self] in
+                    await self?.stopRecognition()
+                }
             }
         }
     }

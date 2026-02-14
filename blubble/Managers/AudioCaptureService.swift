@@ -41,13 +41,16 @@ final class AudioCaptureService: AudioCaptureProtocol {
             }
             
             continuation.onTermination = { @Sendable _ in
-                self.stopCapture()
+                Task { [weak self] in
+                    await self?.stopCapture()
+                }
             }
         }
         
         return stream
     }
     
+    @MainActor
     func stopCapture() {
         if audioEngine.isRunning {
             audioEngine.inputNode.removeTap(onBus: inputBus)
@@ -59,7 +62,7 @@ final class AudioCaptureService: AudioCaptureProtocol {
     
     private func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement, options: [.mixWithOthers, .allowBluetooth])
+        try session.setCategory(.record, mode: .measurement, options: [.mixWithOthers, .allowBluetoothHFP])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
     }
     

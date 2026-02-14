@@ -5,7 +5,8 @@ import AVFoundation
 import OSLog
 
 @MainActor
-class ContentViewModel: ObservableObject {
+@Observable
+class ContentViewModel {
     private let logger = Logger(subsystem: "team1.blubble", category: "ContentViewModel")
     
     // Services
@@ -19,16 +20,16 @@ class ContentViewModel: ObservableObject {
     }
     
     // UI State
-    @Published var isRunning: Bool = false
-    @Published var transcript: String = ""
-    @Published var chatHistory: [ChatMessage] = []
-    @Published var selectedTab: ContentView.Tab = .transcribe
-    @Published var showingSaveConfirmation = false
+    var isRunning: Bool = false
+    var transcript: String = ""
+    var chatHistory: [ChatMessage] = []
+    var selectedTab: ContentView.Tab = .transcribe
+    var showingSaveConfirmation = false
     
     // Identity State
-    @Published var isInitializing: Bool = false
-    @Published var currentSpeaker: String? = nil
-    @Published var speakerProbabilities: [Float] = []
+    var isInitializing: Bool = false
+    var currentSpeaker: String? = nil
+    var speakerProbabilities: [Float] = []
     
     private var captureTask: Task<Void, Never>?
     private var recognitionTask: Task<Void, Never>?

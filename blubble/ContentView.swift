@@ -4,7 +4,7 @@ import RealityKitContent
 import OSLog
 
 struct ContentView: View {
-    @StateObject var viewModel: ContentViewModel
+    @Bindable var viewModel: ContentViewModel
     
     var body: some View {
         ZStack {

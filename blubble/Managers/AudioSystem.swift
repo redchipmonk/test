@@ -4,7 +4,8 @@ import SwiftUI
 import OSLog
 
 @MainActor
-final class AudioSystem: ObservableObject {
+@Observable
+final class AudioSystem {
     let audioCaptureService: any AudioCaptureProtocol
     let speechRecognitionService: any SpeechRecognitionProtocol
     let identityManager: any VoiceIdentityManaging
